@@ -1,15 +1,15 @@
 import React from 'react';
 import { useTournamentStore } from '../store/tournamentStore';
-import { UserCog, MapPin } from 'lucide-react';
+import { UserCog, MapPin, ChevronUp, ChevronDown, X } from 'lucide-react';
+import { LoadingSpinner } from './LoadingSpinner';
 
 export const CourtAssignment: React.FC = () => {
-  const { courts, matches, referees, assignMatchToCourt, assignRefereeToCourt } = useTournamentStore();
+  const { courts, matches, referees, assignMatchToCourt, assignRefereeToCourt, unassignMatchFromCourt, reorderCourtMatches, isLoading, isInitialized } = useTournamentStore();
 
   const upcomingMatches = matches.filter(m => m.status === 'upcoming');
 
   const handleAssignMatch = (courtId: string, matchId: string) => {
     if (!matchId) {
-      assignMatchToCourt(matchId, courtId);
       return;
     }
     
@@ -25,7 +25,6 @@ export const CourtAssignment: React.FC = () => {
 
   const handleAssignReferee = (courtId: string, refereeId: string) => {
     if (!refereeId) {
-      assignRefereeToCourt(refereeId, courtId);
       return;
     }
     
@@ -38,6 +37,21 @@ export const CourtAssignment: React.FC = () => {
       }
     }
   };
+
+  const handleRemoveMatch = (matchId: string, matchName: string) => {
+    if (window.confirm(`Remove "${matchName}" from this court's queue?`)) {
+      unassignMatchFromCourt(matchId);
+    }
+  };
+
+  const handleReorderMatch = (courtId: string, matchId: string, direction: 'up' | 'down') => {
+    reorderCourtMatches(courtId, matchId, 'down');
+  };
+
+  // Show loader during initial data fetch
+  if (isLoading && !isInitialized) {
+    return <LoadingSpinner size="lg" text="Loading Courts..." />;
+  }
 
   return (
     <div className="bg-white rounded-lg shadow-md p-6">
@@ -114,54 +128,94 @@ export const CourtAssignment: React.FC = () => {
               </select>
             </div>
 
-            {/* Current Match */}
-            {court.match ? (
-              <div className={`p-3 rounded-lg border ${
-                court.match.status === 'live' 
-                  ? 'bg-green-50 border-green-200' 
-                  : 'bg-blue-50 border-blue-200'
-              }`}>
-                <div className={`text-xs font-semibold mb-2 ${
-                  court.match.status === 'live' 
-                    ? 'text-green-800' 
-                    : 'text-blue-800'
-                }`}>
-                  {court.match.status === 'live' ? '🔴 LIVE MATCH' : '⏳ MATCH ASSIGNED'}
-                </div>
-                <div className="text-sm font-medium text-gray-800">
-                  {court.match.team1.name} vs {court.match.team2.name}
-                </div>
-                <div className="text-lg font-bold mt-1" style={{ color: court.match.status === 'live' ? '#15803d' : '#1e40af' }}>
-                  {court.match.score.team1} - {court.match.score.team2}
-                </div>
-                {court.match.status === 'upcoming' && (
-                  <div className="mt-2 text-xs text-blue-700">
-                    Referee will start the match
+            {/* Assigned Matches Queue */}
+            {court.matches && court.matches.length > 0 && (
+              <div className="space-y-2 mb-3">
+                <div className="text-xs font-semibold text-gray-700">Assigned Matches ({court.matches.length})</div>
+                {court.matches.map((match, index) => (
+                  <div 
+                    key={match.id}
+                    className={`p-2 rounded-lg border text-xs ${
+                      match.status === 'live' 
+                        ? 'bg-green-50 border-green-300' 
+                        : 'bg-gray-50 border-gray-300'
+                    }`}
+                  >
+                    <div className="flex justify-between items-center gap-2">
+                      <div className="flex-1">
+                        <span className={`font-semibold ${match.status === 'live' ? 'text-green-800' : 'text-gray-700'}`}>
+                          {index + 1}. {match.team1.name} vs {match.team2.name}
+                        </span>
+                        {match.status === 'live' && (
+                          <span className="ml-2 text-green-600 font-bold">
+                            {match.score.team1} - {match.score.team2} 🔴
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <span className={`text-xs px-2 py-1 rounded ${
+                          match.status === 'live' 
+                            ? 'bg-green-200 text-green-800' 
+                            : 'bg-blue-200 text-blue-800'
+                        }`}>
+                          {match.status === 'live' ? 'LIVE' : 'QUEUED'}
+                        </span>
+                        {/* Reorder and Remove buttons - only show for queued matches */}
+                        {match.status !== 'live' && (
+                          <div className="flex gap-1">
+                            <button
+                              onClick={() => handleReorderMatch(court.id, match.id, 'up')}
+                              disabled={index === 0 || (court.matches && court.matches[0].status === 'live' && index === 1)}
+                              className="p-1 rounded hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed"
+                              title="Move up"
+                            >
+                              <ChevronUp className="w-3 h-3" />
+                            </button>
+                            <button
+                              onClick={() => handleReorderMatch(court.id, match.id, 'down')}
+                              disabled={court.matches && index === court.matches.length - 1}
+                              className="p-1 rounded hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed"
+                              title="Move down"
+                            >
+                              <ChevronDown className="w-3 h-3" />
+                            </button>
+                            <button
+                              onClick={() => handleRemoveMatch(match.id, `${match.team1.name} vs ${match.team2.name}`)}
+                              className="p-1 rounded hover:bg-red-100 text-red-600"
+                              title="Remove from queue"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                )}
-              </div>
-            ) : (
-              <div className="space-y-2">
-                <label className="block text-xs font-medium text-gray-700">
-                  Assign Match
-                </label>
-                <select
-                  onChange={(e) => e.target.value && handleAssignMatch(court.id, e.target.value)}
-                  className="w-full px-2 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  defaultValue=""
-                >
-                  <option value="">Select Match</option>
-                  {upcomingMatches.map(match => (
-                    <option key={match.id} value={match.id}>
-                      {match.team1.name} vs {match.team2.name}
-                    </option>
-                  ))}
-                </select>
-                {upcomingMatches.length === 0 && (
-                  <p className="text-xs text-gray-500 mt-2">No upcoming matches available</p>
-                )}
+                ))}
               </div>
             )}
+
+            {/* Assign Match Dropdown - Always available */}
+            <div className="space-y-2">
+              <label className="block text-xs font-medium text-gray-700">
+                Assign Match
+              </label>
+              <select
+                onChange={(e) => e.target.value && handleAssignMatch(court.id, e.target.value)}
+                className="w-full px-2 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                value=""
+              >
+                <option value="">Select Match</option>
+                {upcomingMatches.filter(m => !m.courtId).map(match => (
+                  <option key={match.id} value={match.id}>
+                    {match.team1.name} vs {match.team2.name}
+                  </option>
+                ))}
+              </select>
+              {upcomingMatches.filter(m => !m.courtId).length === 0 && (
+                <p className="text-xs text-gray-500 mt-2">No unassigned matches available</p>
+              )}
+            </div>
           </div>
         ))}
       </div>

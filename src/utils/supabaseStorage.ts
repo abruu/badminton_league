@@ -26,8 +26,49 @@ export const getMatches = async (): Promise<Match[]> => {
 };
 
 export const saveMatch = async (match: Match): Promise<void> => {
-  const { error } = await supabase.from('matches').upsert(match);
-  if (error) throw error;
+  console.log('[SAVE_MATCH] Starting save for match:', match.id);
+  
+  try {
+    // Create a clean copy without computed properties
+    const matchData = {
+      id: match.id,
+      team1: match.team1,
+      team2: match.team2,
+      score: match.score,
+      sets: match.sets || [{ setNumber: 1, score: { team1: 0, team2: 0 } }],
+      currentSetNumber: match.currentSetNumber || 1,
+      servingTeam: match.servingTeam || 'team1',
+      team1Position: match.team1Position || 'left',
+      team2Position: match.team2Position || 'right',
+      winner: match.winner,
+      status: match.status,
+      courtId: match.courtId ?? null, // Convert undefined to null for database
+      pendingApproval: match.pendingApproval,
+      requestedBy: match.requestedBy,
+      queueOrder: match.queueOrder ?? null, // Convert undefined to null for database
+      history: match.history || [] // Save history array for undo tracking
+    };
+    
+    console.log('[SAVE_MATCH] Match data prepared, history length:', matchData.history.length);
+    console.log('[SAVE_MATCH] Calling Supabase upsert...');
+    
+    const { error, data } = await supabase.from('matches').upsert(matchData).select();
+    
+    if (error) {
+      console.error('[SAVE_MATCH] Supabase error:', {
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        code: error.code
+      });
+      throw error;
+    }
+    
+    console.log('[SAVE_MATCH] Match saved successfully:', data);
+  } catch (err) {
+    console.error('[SAVE_MATCH] Unexpected error:', err);
+    throw err;
+  }
 };
 
 export const deleteMatch = async (id: string): Promise<void> => {
@@ -43,8 +84,19 @@ export const getCourts = async (): Promise<Court[]> => {
 };
 
 export const saveCourt = async (court: Court): Promise<void> => {
-  const { error } = await supabase.from('courts').upsert(court);
-  if (error) throw error;
+  // Create a clean copy without computed properties (matches, match)
+  const courtData = {
+    id: court.id,
+    name: court.name,
+    refereeId: court.refereeId,
+    refereeName: court.refereeName
+  };
+  
+  const { error } = await supabase.from('courts').upsert(courtData);
+  if (error) {
+    console.error('Error saving court:', error);
+    throw error;
+  }
 };
 
 // Referees
@@ -117,15 +169,33 @@ export const deleteLastScoreAction = async (matchId: string): Promise<void> => {
 
 // Clear all data
 export const clearAll = async (): Promise<void> => {
-  // Delete all data from all tables
+  // Delete all data from all tables EXCEPT teams
+  // Teams are preserved so they can be reused in the next tournament
   await Promise.all([
     supabase.from('score_history').delete().neq('matchId', ''), // Delete score history first (has foreign key to matches)
     supabase.from('matches').delete().neq('id', ''),
-    supabase.from('teams').delete().neq('id', ''),
+    // Do NOT delete teams - they are preserved
+    // supabase.from('teams').delete().neq('id', ''),
     supabase.from('referees').delete().neq('id', ''),
     supabase.from('courts').delete().neq('id', ''),
     supabase.from('zones').delete().neq('id', '')
   ]);
+
+  // Reset team statistics (set all stats to 0)
+  const teams = await getTeams();
+  const resetPromises = teams.map(team => {
+    const resetTeam = {
+      ...team,
+      stats: {
+        matchesWon: 0,
+        matchesLost: 0,
+        points: 0
+      }
+    };
+    return saveTeam(resetTeam);
+  });
+  
+  await Promise.all(resetPromises);
 };
 
 // Initialize default data

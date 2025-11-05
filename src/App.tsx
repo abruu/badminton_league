@@ -9,6 +9,8 @@ import Login from './pages/Login';
 import ProtectedRoute from './components/ProtectedRoute';
 import { RefereeProtectedRoute } from './components/RefereeProtectedRoute';
 import { useTournamentStore } from './store/tournamentStore';
+import { LoadingSpinner } from './components/LoadingSpinner';
+import { useRealtimeSubscriptions } from './hooks/useRealtimeSubscriptions';
 import { LayoutDashboard, UserCheck, Trophy, Zap, Shield, BarChart2, Clock } from 'lucide-react';
 
 function HomePage() {
@@ -200,11 +202,19 @@ function HomePage() {
 }
 
 function App() {
-  const initializeData = useTournamentStore(state => state.initializeData);
+  const { initializeData, isLoading, isInitialized } = useTournamentStore();
+
+  // Set up real-time subscriptions (replaces polling)
+  useRealtimeSubscriptions();
 
   useEffect(() => {
     initializeData();
   }, [initializeData]);
+
+  // Show full-screen loader during initial data fetch
+  if (isLoading && !isInitialized) {
+    return <LoadingSpinner fullScreen size="xl" text="Loading Tournament Data..." />;
+  }
 
   return (
     <BrowserRouter>

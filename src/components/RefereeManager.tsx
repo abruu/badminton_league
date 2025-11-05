@@ -1,11 +1,14 @@
 import React, { useState } from 'react';
-import { UserCheck, Plus, Trash2, Eye, EyeOff } from 'lucide-react';
+import { UserCheck, Plus, Trash2, Eye, EyeOff, Edit2, Loader2 } from 'lucide-react';
 import { useTournamentStore } from '../store/tournamentStore';
+import { LoadingSpinner } from './LoadingSpinner';
 import type { Referee } from '../types';
 
 export const RefereeManager: React.FC = () => {
-  const { referees, courts, addReferee, deleteReferee } = useTournamentStore();
+  const { referees, courts, addReferee, updateReferee, deleteReferee, isLoading, isInitialized } = useTournamentStore();
   const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState<{ [key: string]: boolean }>({});
   const [formData, setFormData] = useState({
     name: '',
@@ -14,37 +17,76 @@ export const RefereeManager: React.FC = () => {
     courtId: ''
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setLoading(true);
     
-    if (!formData.name.trim() || !formData.username.trim() || !formData.password.trim()) {
-      alert('Please fill in all required fields');
-      return;
+    try {
+      if (!formData.name.trim() || !formData.username.trim() || !formData.password.trim()) {
+        alert('Please fill in all required fields');
+        return;
+      }
+
+      // Check if username already exists (only for new referees or if username changed)
+      const existingReferee = referees.find(ref => ref.username === formData.username);
+      if (existingReferee && existingReferee.id !== editingId) {
+        alert('Username already exists. Please choose a different username.');
+        return;
+      }
+
+      if (editingId) {
+        // Update existing referee
+        if (window.confirm('Are you sure you want to update this referee?')) {
+          await updateReferee(editingId, {
+            name: formData.name,
+            username: formData.username,
+            password: formData.password,
+            courtId: formData.courtId || undefined
+          });
+          setEditingId(null);
+          setFormData({ name: '', username: '', password: '', courtId: '' });
+          setShowForm(false);
+        }
+      } else {
+        // Add new referee
+        const newReferee: Referee = {
+          id: `referee-${Date.now()}`,
+          name: formData.name,
+          username: formData.username,
+          password: formData.password,
+          courtId: formData.courtId || undefined
+        };
+
+        await addReferee(newReferee);
+        setFormData({ name: '', username: '', password: '', courtId: '' });
+        setShowForm(false);
+      }
+    } finally {
+      setLoading(false);
     }
-
-    // Check if username already exists
-    if (referees.some(ref => ref.username === formData.username)) {
-      alert('Username already exists. Please choose a different username.');
-      return;
-    }
-
-    const newReferee: Referee = {
-      id: `referee-${Date.now()}`,
-      name: formData.name,
-      username: formData.username,
-      password: formData.password,
-      courtId: formData.courtId || undefined
-    };
-
-    addReferee(newReferee);
-    setFormData({ name: '', username: '', password: '', courtId: '' });
-    setShowForm(false);
   };
 
   const handleDelete = (id: string) => {
     if (confirm('Are you sure you want to delete this referee?')) {
       deleteReferee(id);
     }
+  };
+
+  const handleEdit = (referee: Referee) => {
+    setEditingId(referee.id);
+    setFormData({
+      name: referee.name,
+      username: referee.username,
+      password: referee.password,
+      courtId: referee.courtId || ''
+    });
+    setShowForm(true);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingId(null);
+    setFormData({ name: '', username: '', password: '', courtId: '' });
+    setShowForm(false);
   };
 
   const togglePasswordVisibility = (refereeId: string) => {
@@ -54,11 +96,16 @@ export const RefereeManager: React.FC = () => {
     }));
   };
 
-  const getCourtName = (courtId?: string) => {
+  const getCourtName = (courtId: string | undefined) => {
     if (!courtId) return 'Unassigned';
     const court = courts.find(c => c.id === courtId);
     return court ? court.name : 'Unassigned';
   };
+
+  // Show loader during initial data fetch
+  if (isLoading && !isInitialized) {
+    return <LoadingSpinner size="lg" text="Loading Referees..." />;
+  }
 
   return (
     <div className="space-y-6">
@@ -79,10 +126,12 @@ export const RefereeManager: React.FC = () => {
         </button>
       </div>
 
-      {/* Add Referee Form */}
+      {/* Add/Edit Referee Form */}
       {showForm && (
         <div className="bg-white rounded-lg shadow-md p-6">
-          <h3 className="text-xl font-semibold mb-4">Create New Referee</h3>
+          <h3 className="text-xl font-semibold mb-4">
+            {editingId ? 'Edit Referee' : 'Create New Referee'}
+          </h3>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -144,17 +193,17 @@ export const RefereeManager: React.FC = () => {
             <div className="flex gap-2">
               <button
                 type="submit"
-                className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 transition"
+                disabled={loading}
+                className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               >
-                Create Referee
+                {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+                {editingId ? 'Update Referee' : 'Create Referee'}
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  setShowForm(false);
-                  setFormData({ name: '', username: '', password: '', courtId: '' });
-                }}
-                className="bg-gray-500 text-white px-6 py-2 rounded-lg hover:bg-gray-600 transition"
+                onClick={handleCancelEdit}
+                disabled={loading}
+                className="bg-gray-500 text-white px-6 py-2 rounded-lg hover:bg-gray-600 transition disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Cancel
               </button>
@@ -228,12 +277,22 @@ export const RefereeManager: React.FC = () => {
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <button
-                        onClick={() => handleDelete(referee.id)}
-                        className="text-red-600 hover:text-red-800 transition"
-                      >
-                        <Trash2 className="w-5 h-5" />
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => handleEdit(referee)}
+                          className="text-blue-600 hover:text-blue-800 transition"
+                          title="Edit referee"
+                        >
+                          <Edit2 className="w-5 h-5" />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(referee.id)}
+                          className="text-red-600 hover:text-red-800 transition"
+                          title="Delete referee"
+                        >
+                          <Trash2 className="w-5 h-5" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}

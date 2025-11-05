@@ -3,14 +3,15 @@ import { useTournamentStore } from '../store/tournamentStore';
 import { Trophy, Plus, RotateCcw, CheckCircle } from 'lucide-react';
 
 export const RefereePanel: React.FC = () => {
-  const { courts, updateMatchScore, finishMatch, undoLastScore, refreshData, scoreHistory } = useTournamentStore();
+  const { courts, updateMatchScore, finishMatch, undoLastScore, refreshData } = useTournamentStore();
   const [selectedCourtId, setSelectedCourtId] = useState<string>('');
 
   const selectedCourt = courts.find(c => c.id === selectedCourtId);
   const match = selectedCourt?.match;
 
-  // Check if there are any actions to undo for this match
-  const canUndo = match ? scoreHistory.filter(h => h.matchId === match.id).length > 0 : false;
+  // Check if there are any events to undo in the match's history for the current set
+  const canUndo = match && match.history 
+    && match.history.some(event => event.setNumber === match.currentSetNumber);
 
   useEffect(() => {
     if (courts.length > 0 && !selectedCourtId) {
@@ -18,13 +19,9 @@ export const RefereePanel: React.FC = () => {
     }
   }, [courts, selectedCourtId]);
 
+  // Real-time subscriptions in useRealtimeSubscriptions hook handle updates
+  // Only listen for storage events from other tabs for immediate sync
   useEffect(() => {
-    // Auto-refresh from LocalStorage every 1 second
-    const interval = setInterval(() => {
-      refreshData();
-    }, 1000);
-
-    // Listen for storage events
     const handleStorageChange = () => {
       refreshData();
     };
@@ -33,7 +30,6 @@ export const RefereePanel: React.FC = () => {
     window.addEventListener('storage-update', handleStorageChange);
 
     return () => {
-      clearInterval(interval);
       window.removeEventListener('storage', handleStorageChange);
       window.removeEventListener('storage-update', handleStorageChange);
     };

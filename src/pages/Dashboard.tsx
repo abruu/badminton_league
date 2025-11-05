@@ -5,13 +5,14 @@ import { MatchScheduler } from '../components/MatchScheduler';
 import { CourtAssignment } from '../components/CourtAssignment';
 import { RefereeManager } from '../components/RefereeManager';
 import { Statistics } from '../components/Statistics';
-import { LayoutDashboard, Users, Calendar, MapPin, UserCheck, BarChart3, RotateCcw, LogOut } from 'lucide-react';
+import { LayoutDashboard, Users, Calendar, MapPin, UserCheck, BarChart3, RotateCcw, LogOut, Loader2 } from 'lucide-react';
 import { useTournamentStore } from '../store/tournamentStore';
 
 type Tab = 'teams' | 'matches' | 'courts' | 'referees' | 'stats';
 
 export const Dashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState<Tab>('teams');
+  const [loading, setLoading] = useState(false);
   const { resetTournament } = useTournamentStore();
   const navigate = useNavigate();
 
@@ -23,10 +24,30 @@ export const Dashboard: React.FC = () => {
     { id: 'stats' as Tab, label: 'Statistics', icon: BarChart3 }
   ];
 
-  const handleReset = () => {
-    if (confirm('Are you sure you want to reset the entire tournament? This will delete all data!')) {
-      resetTournament();
-      alert('Tournament has been reset successfully!');
+  const handleReset = async () => {
+    // Ask for password first
+    const password = prompt('Enter reset password to proceed:');
+    
+    if (!password) {
+      return; // User cancelled
+    }
+
+    // Validate password
+    const resetPassword = import.meta.env.VITE_RESET_PASSWORD || 'admin123';
+    if (password !== resetPassword) {
+      alert('Incorrect password! Reset cancelled.');
+      return;
+    }
+
+    // Confirm reset action
+    if (confirm('Are you sure you want to reset the tournament? This will delete all matches, courts, referees, and zones, but teams will be preserved with reset statistics.')) {
+      setLoading(true);
+      try {
+        await resetTournament();
+        alert('Tournament has been reset successfully! Teams have been preserved.');
+      } finally {
+        setLoading(false);
+      }
     }
   };
 
@@ -51,14 +72,16 @@ export const Dashboard: React.FC = () => {
             <div className="flex gap-2">
               <button
                 onClick={handleReset}
-                className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition flex items-center gap-2"
+                disabled={loading}
+                className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <RotateCcw className="w-5 h-5" />
-                Reset Tournament
+                {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <RotateCcw className="w-5 h-5" />}
+                {loading ? 'Resetting...' : 'Reset Tournament'}
               </button>
               <button
                 onClick={handleLogout}
-                className="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition flex items-center gap-2"
+                disabled={loading}
+                className="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <LogOut className="w-5 h-5" />
                 Logout

@@ -1,16 +1,21 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { UserCheck, LogOut, Trophy, Clock, MapPin } from 'lucide-react';
+import { UserCheck, LogOut, Trophy, Clock, MapPin, Loader2 } from 'lucide-react';
 import { useTournamentStore } from '../store/tournamentStore';
+import { LoadingSpinner } from '../components/LoadingSpinner';
 import type { Match, Court } from '../types';
 
 export const RefereePanel: React.FC = () => {
   const navigate = useNavigate();
-  const { courts, matches, updateMatchScore, startMatch, finishMatch, undoLastScore } = useTournamentStore();
+  const { courts, matches, updateMatchScore, startMatch, finishMatch, undoLastScore, endSet, isLoading, isInitialized } = useTournamentStore();
   const [refereeName, setRefereeName] = useState('');
   const [courtId, setCourtId] = useState('');
   const [currentMatch, setCurrentMatch] = useState<Match | null>(null);
   const [assignedCourt, setAssignedCourt] = useState<Court | null>(null);
+  const [assignedMatches, setAssignedMatches] = useState<Match[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [showEndSetModal, setShowEndSetModal] = useState(false);
+  const [selectedWinner, setSelectedWinner] = useState<'team1' | 'team2' | null>(null);
 
   useEffect(() => {
     // Check authentication
@@ -33,13 +38,15 @@ export const RefereePanel: React.FC = () => {
       const court = courts.find(c => c.id === courtId);
       setAssignedCourt(court || null);
 
-      // Find current match on this court
-      if (court?.match) {
-        const match = matches.find(m => m.id === court.match?.id);
-        setCurrentMatch(match || null);
-      } else {
-        setCurrentMatch(null);
-      }
+      // Find ALL matches assigned to this court (upcoming or live)
+      const courtMatches = matches.filter(
+        m => m.courtId === courtId && (m.status === 'upcoming' || m.status === 'live')
+      );
+      setAssignedMatches(courtMatches);
+
+      // Find current LIVE match on this court
+      const liveMatch = matches.find(m => m.courtId === courtId && m.status === 'live');
+      setCurrentMatch(liveMatch || null);
     }
   }, [courtId, courts, matches]);
 
@@ -53,22 +60,41 @@ export const RefereePanel: React.FC = () => {
 
   const handleScoreUpdate = async (team: 'team1' | 'team2') => {
     if (currentMatch && currentMatch.status === 'live') {
-      await updateMatchScore(currentMatch.id, team, 1);
+      setLoading(true);
+      try {
+        await updateMatchScore(currentMatch.id, team, 1);
+      } finally {
+        setLoading(false);
+      }
     }
   };
 
   const handleUndoScore = async () => {
     if (currentMatch && currentMatch.status === 'live') {
       if (window.confirm('Undo the last score update?')) {
-        await undoLastScore(currentMatch.id);
+        setLoading(true);
+        try {
+          await undoLastScore(currentMatch.id);
+        } finally {
+          setLoading(false);
+        }
       }
     }
   };
 
-  const handleStartMatch = async () => {
-    if (currentMatch && currentMatch.status === 'upcoming') {
-      if (confirm('Start this match? You will be able to update scores after starting.')) {
-        await startMatch(currentMatch.id);
+  const handleStartMatch = async (matchId?: string) => {
+    const targetMatchId = matchId || currentMatch?.id;
+    if (!targetMatchId) return;
+
+    const matchToStart = matches.find(m => m.id === targetMatchId);
+    if (matchToStart && matchToStart.status === 'upcoming') {
+      if (confirm(`Start match: ${matchToStart.team1.name} vs ${matchToStart.team2.name}?`)) {
+        setLoading(true);
+        try {
+          await startMatch(targetMatchId);
+        } finally {
+          setLoading(false);
+        }
       }
     }
   };
@@ -76,10 +102,58 @@ export const RefereePanel: React.FC = () => {
   const handleFinishMatch = async () => {
     if (currentMatch && currentMatch.status === 'live') {
       if (confirm('Finish this match? This will mark the match as completed.')) {
-        await finishMatch(currentMatch.id);
+        setLoading(true);
+        try {
+          await finishMatch(currentMatch.id);
+        } finally {
+          setLoading(false);
+        }
       }
     }
   };
+
+  const handleEndSet = () => {
+    if (!currentMatch) return;
+    
+    // Check if current set is already locked
+    const currentSet = currentMatch.sets?.find(s => s.setNumber === currentMatch.currentSetNumber);
+    if (currentSet?.locked) {
+      alert('This set has already been ended.');
+      return;
+    }
+    
+    // Show modal to select winner
+    setShowEndSetModal(true);
+    setSelectedWinner(null);
+  };
+
+  const confirmEndSet = async () => {
+    if (!currentMatch || !selectedWinner) {
+      alert('Please select a winner');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await endSet(currentMatch.id, selectedWinner);
+      setShowEndSetModal(false);
+      setSelectedWinner(null);
+    } catch (error) {
+      console.error('Error ending set:', error);
+      alert('Failed to end set');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Show loader during initial data fetch
+  if (isLoading && !isInitialized) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-green-50 via-blue-50 to-purple-50 flex items-center justify-center">
+        <LoadingSpinner size="xl" text="Loading Referee Panel..." />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-50 via-blue-50 to-purple-50">
@@ -129,8 +203,9 @@ export const RefereePanel: React.FC = () => {
           )}
         </div>
 
-        {/* Current Match */}
+        {/* Show LIVE match if one exists, otherwise show list of assigned matches */}
         {currentMatch ? (
+          // LIVE MATCH VIEW
           <div className="bg-white rounded-lg shadow-md p-6">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
@@ -151,74 +226,157 @@ export const RefereePanel: React.FC = () => {
               </div>
             </div>
 
-            {/* Score Board */}
-            <div className="grid grid-cols-2 gap-6 mb-6">
-              {/* Team 1 */}
-              <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-6">
-                <h3 className="text-lg font-semibold text-gray-700 mb-2">
-                  {currentMatch.team1.name}
-                </h3>
-                <div className="text-5xl font-bold text-blue-600 mb-4">
-                  {currentMatch.score.team1}
-                </div>
-                <div className="space-y-2">
-                  {currentMatch.team1.players.map(player => (
-                    <div key={player.id} className="text-sm text-gray-600">
-                      • {player.name}
-                    </div>
-                  ))}
-                </div>
-                {currentMatch.status === 'live' && (
-                  <button
-                    onClick={() => handleScoreUpdate('team1')}
-                    className="mt-4 w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition font-semibold"
-                  >
-                    +1 Point
-                  </button>
-                )}
+            {/* Set Score Header (Best of 3) */}
+            <div className="bg-gradient-to-r from-purple-50 to-indigo-50 rounded-lg p-4 mb-6">
+              <div className="text-center mb-2">
+                <h3 className="text-sm font-semibold text-gray-600 uppercase">Best of 3 Sets</h3>
+                <div className="text-xs text-gray-500">First to 2 sets wins • Set to 15 points (17 max)</div>
               </div>
+              <div className="grid grid-cols-3 gap-4 text-center">
+                <div>
+                  <div className="text-xs text-gray-500 mb-1">{currentMatch.team1.name}</div>
+                  <div className="text-3xl font-bold text-blue-600">{currentMatch.score?.team1 || 0}</div>
+                  <div className="text-xs text-gray-500">Sets Won</div>
+                </div>
+                <div className="flex items-center justify-center text-2xl font-bold text-gray-400">VS</div>
+                <div>
+                  <div className="text-xs text-gray-500 mb-1">{currentMatch.team2.name}</div>
+                  <div className="text-3xl font-bold text-green-600">{currentMatch.score?.team2 || 0}</div>
+                  <div className="text-xs text-gray-500">Sets Won</div>
+                </div>
+              </div>
+              {/* Set History */}
+              {currentMatch.sets && currentMatch.sets.filter(s => s.winner).length > 0 && (
+                <div className="mt-3 pt-3 border-t border-gray-200">
+                  <div className="text-xs text-gray-500 mb-1">Completed Sets:</div>
+                  <div className="flex gap-2 justify-center flex-wrap">
+                    {currentMatch.sets.filter(s => s.winner).map((set) => (
+                      <span key={set.setNumber} className={`px-2 py-1 rounded text-xs font-mono ${
+                        set.winner === 'team1' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'
+                      }`}>
+                        Set {set.setNumber}: {set.score.team1}-{set.score.team2} {set.winner === 'team1' ? '(Team 1)' : '(Team 2)'}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
 
-              {/* Team 2 */}
-              <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg p-6">
-                <h3 className="text-lg font-semibold text-gray-700 mb-2">
-                  {currentMatch.team2.name}
-                </h3>
-                <div className="text-5xl font-bold text-purple-600 mb-4">
-                  {currentMatch.score.team2}
+            {/* Current Set Score with Court Positions */}
+            <div className="bg-gray-50 rounded-lg p-6 mb-6 border-2 border-gray-200">
+              <h3 className="text-center text-sm font-semibold text-gray-600 uppercase mb-4">
+                Current Set {currentMatch.currentSetNumber || 1}
+              </h3>
+              
+              {/* Court Layout */}
+              <div className="relative">
+                <div className="grid grid-cols-2 gap-8">
+                  {/* Determine which team is on left/right */}
+                  {['left', 'right'].map((position) => {
+                    const isTeam1 = (currentMatch.team1Position || 'left') === position;
+                    const team = isTeam1 ? currentMatch.team1 : currentMatch.team2;
+                    const teamKey: 'team1' | 'team2' = isTeam1 ? 'team1' : 'team2';
+                    
+                    // Get current set score
+                    const currentSet = currentMatch.sets?.find(s => s.setNumber === currentMatch.currentSetNumber);
+                    const score = currentSet?.score[teamKey] || 0;
+                    
+                    const isServing = (currentMatch.servingTeam || 'team1') === teamKey;
+                    const bgColor = isTeam1 ? 'from-blue-50 to-blue-100' : 'from-green-50 to-green-100';
+                    const textColor = isTeam1 ? 'text-blue-600' : 'text-green-600';
+                    const buttonColor = isTeam1 ? 'bg-blue-600 hover:bg-blue-700' : 'bg-green-600 hover:bg-green-700';
+
+                    return (
+                      <div key={position} className={`bg-gradient-to-br ${bgColor} rounded-lg p-6 relative`}>
+                        {/* Position Label */}
+                        <div className="absolute -top-2 left-1/2 transform -translate-x-1/2 bg-gray-700 text-white text-xs px-3 py-1 rounded-full uppercase font-semibold">
+                          {position}
+                        </div>
+                        
+                        {/* Serving Indicator */}
+                        {isServing && (
+                          <div className="absolute -top-2 right-2 bg-yellow-400 text-yellow-900 text-xs px-2 py-1 rounded-full font-bold animate-pulse">
+                            🏸 SERVING
+                          </div>
+                        )}
+
+                        <h3 className="text-lg font-semibold text-gray-700 mb-2 mt-2">
+                          {team.name}
+                        </h3>
+                        <div className={`text-6xl font-bold ${textColor} mb-4`}>
+                          {score}
+                        </div>
+                        <div className="space-y-2 mb-4">
+                          {team.players.map(player => (
+                            <div key={player.id} className="text-sm text-gray-600 flex items-center">
+                              <span className="w-2 h-2 bg-gray-400 rounded-full mr-2"></span>
+                              {player.name}
+                            </div>
+                          ))}
+                        </div>
+                        {currentMatch.status === 'live' && (
+                          <button
+                            onClick={() => handleScoreUpdate(teamKey)}
+                            disabled={loading || currentMatch.sets?.find(s => s.setNumber === currentMatch.currentSetNumber)?.locked}
+                            className={`w-full ${buttonColor} text-white py-3 rounded-lg transition font-semibold disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2`}
+                          >
+                            {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+                            +1 Point
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
-                <div className="space-y-2">
-                  {currentMatch.team2.players.map(player => (
-                    <div key={player.id} className="text-sm text-gray-600">
-                      • {player.name}
-                    </div>
-                  ))}
-                </div>
-                {currentMatch.status === 'live' && (
-                  <button
-                    onClick={() => handleScoreUpdate('team2')}
-                    className="mt-4 w-full bg-purple-600 text-white py-2 rounded-lg hover:bg-purple-700 transition font-semibold"
-                  >
-                    +1 Point
-                  </button>
-                )}
+                
+                {/* Net Divider */}
+                <div className="absolute top-0 left-1/2 transform -translate-x-1/2 h-full w-1 bg-gradient-to-b from-gray-300 via-gray-400 to-gray-300"></div>
               </div>
             </div>
 
             {/* Match Controls */}
             {currentMatch.status === 'live' && (
-              <div className="flex gap-3">
-                <button
-                  onClick={handleUndoScore}
-                  className="flex-1 bg-yellow-500 text-white py-3 rounded-lg hover:bg-yellow-600 transition font-semibold"
-                >
-                  Undo Last Point
-                </button>
-                <button
-                  onClick={handleFinishMatch}
-                  className="flex-1 bg-red-600 text-white py-3 rounded-lg hover:bg-red-700 transition font-semibold"
-                >
-                  Finish Match
-                </button>
+              <div className="space-y-3">
+                <div className="flex gap-3">
+                  <button
+                    onClick={handleUndoScore}
+                    disabled={loading}
+                    className="flex-1 bg-yellow-500 text-white py-3 rounded-lg hover:bg-yellow-600 transition font-semibold disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  >
+                    {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+                    Undo Last Point
+                  </button>
+                  <button
+                    onClick={handleEndSet}
+                    disabled={loading || currentMatch.sets?.find(s => s.setNumber === currentMatch.currentSetNumber)?.locked}
+                    className="flex-1 bg-orange-500 text-white py-3 rounded-lg hover:bg-orange-600 transition font-semibold disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  >
+                    {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+                    🟠 End Set
+                  </button>
+                  <button
+                    onClick={handleFinishMatch}
+                    disabled={loading}
+                    className="flex-1 bg-red-600 text-white py-3 rounded-lg hover:bg-red-700 transition font-semibold disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  >
+                    {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+                    Finish Match
+                  </button>
+                </div>
+                
+                {/* Set Locked Message */}
+                {currentMatch.sets?.find(s => s.setNumber === currentMatch.currentSetNumber)?.locked && (
+                  <div className="bg-orange-50 border border-orange-300 rounded-lg p-3 text-center">
+                    <p className="text-orange-800 font-semibold">
+                      ✅ Set {currentMatch.currentSetNumber} has been ended
+                    </p>
+                    <p className="text-orange-700 text-sm">
+                      Winner: {currentMatch.sets?.find(s => s.setNumber === currentMatch.currentSetNumber)?.winner === 'team1' 
+                        ? currentMatch.team1.name 
+                        : currentMatch.team2.name}
+                    </p>
+                  </div>
+                )}
               </div>
             )}
 
@@ -232,9 +390,11 @@ export const RefereePanel: React.FC = () => {
                   Click the button below to begin this match. You'll be able to update scores after starting.
                 </p>
                 <button
-                  onClick={handleStartMatch}
-                  className="bg-green-600 text-white py-3 px-6 rounded-lg hover:bg-green-700 transition font-semibold text-lg"
+                  onClick={() => handleStartMatch()}
+                  disabled={loading}
+                  className="bg-green-600 text-white py-3 px-6 rounded-lg hover:bg-green-700 transition font-semibold text-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 mx-auto"
                 >
+                  {loading && <Loader2 className="w-4 h-4 animate-spin" />}
                   🎾 Start Match
                 </button>
               </div>
@@ -249,19 +409,198 @@ export const RefereePanel: React.FC = () => {
             )}
           </div>
         ) : (
+          // MATCH SELECTION VIEW - Show all assigned matches
           assignedCourt && (
-            <div className="bg-white rounded-lg shadow-md p-12 text-center">
-              <Trophy className="w-16 h-16 mx-auto mb-4 text-gray-400" />
-              <h3 className="text-xl font-semibold text-gray-700 mb-2">
-                No Active Match
-              </h3>
-              <p className="text-gray-500">
-                You don't have any match assigned to your court at the moment.
-              </p>
+            <div className="bg-white rounded-lg shadow-md p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+                  <Trophy className="w-7 h-7 text-yellow-600" />
+                  Assigned Matches
+                </h2>
+                <div className="text-sm text-gray-500">
+                  {assignedMatches.length} match{assignedMatches.length !== 1 ? 'es' : ''} in queue
+                </div>
+              </div>
+
+              {assignedMatches.length > 0 ? (
+                <div className="space-y-4">
+                  {assignedMatches.map((match, index) => (
+                    <div
+                      key={match.id}
+                      className="border-2 border-gray-200 rounded-lg p-6 hover:border-blue-400 transition"
+                    >
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 font-bold">
+                            {index + 1}
+                          </div>
+                          <div>
+                            <div className="text-xs text-gray-500 uppercase font-semibold">Match {index + 1}</div>
+                            <div className="text-sm text-gray-600">
+                              {match.status === 'upcoming' ? 'Ready to Start' : 'In Progress'}
+                            </div>
+                          </div>
+                        </div>
+                        <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                          match.status === 'live' 
+                            ? 'bg-green-100 text-green-800' 
+                            : 'bg-blue-100 text-blue-800'
+                        }`}>
+                          {match.status.toUpperCase()}
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-4 items-center mb-4">
+                        {/* Team 1 */}
+                        <div className="text-center">
+                          <div className="font-semibold text-lg text-gray-800 mb-1">
+                            {match.team1.name}
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            {match.team1.players.map(p => p.name).join(', ')}
+                          </div>
+                        </div>
+
+                        {/* VS */}
+                        <div className="text-center text-2xl font-bold text-gray-400">
+                          VS
+                        </div>
+
+                        {/* Team 2 */}
+                        <div className="text-center">
+                          <div className="font-semibold text-lg text-gray-800 mb-1">
+                            {match.team2.name}
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            {match.team2.players.map(p => p.name).join(', ')}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Start Match Button */}
+                      {match.status === 'upcoming' && (
+                        <button
+                          onClick={() => handleStartMatch(match.id)}
+                          disabled={loading}
+                          className="w-full bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 transition font-semibold disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                        >
+                          {loading && <Loader2 className="w-5 h-5 animate-spin" />}
+                          Start Match
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-12">
+                  <Trophy className="w-16 h-16 mx-auto mb-4 text-gray-400" />
+                  <h3 className="text-xl font-semibold text-gray-700 mb-2">
+                    No Matches Assigned
+                  </h3>
+                  <p className="text-gray-500">
+                    You don't have any matches assigned to your court at the moment.
+                  </p>
+                </div>
+              )}
             </div>
           )
         )}
       </div>
+
+      {/* End Set Modal */}
+      {showEndSetModal && currentMatch && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+            <h2 className="text-2xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+              <Trophy className="w-6 h-6 text-orange-500" />
+              End Set {currentMatch.currentSetNumber}
+            </h2>
+            
+            <p className="text-gray-600 mb-6">
+              Select the winner of this set. The set will be locked and the next set will begin.
+            </p>
+
+            {/* Current Score Display */}
+            <div className="bg-gray-50 rounded-lg p-4 mb-6">
+              <p className="text-sm text-gray-500 mb-2 text-center">Current Score</p>
+              <div className="flex justify-around text-center">
+                <div>
+                  <p className="text-sm font-semibold text-gray-700">{currentMatch.team1.name}</p>
+                  <p className="text-3xl font-bold text-blue-600">
+                    {currentMatch.sets?.find(s => s.setNumber === currentMatch.currentSetNumber)?.score.team1 || 0}
+                  </p>
+                </div>
+                <div className="flex items-center text-2xl font-bold text-gray-400">-</div>
+                <div>
+                  <p className="text-sm font-semibold text-gray-700">{currentMatch.team2.name}</p>
+                  <p className="text-3xl font-bold text-green-600">
+                    {currentMatch.sets?.find(s => s.setNumber === currentMatch.currentSetNumber)?.score.team2 || 0}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Winner Selection */}
+            <div className="space-y-3 mb-6">
+              <p className="font-semibold text-gray-700 mb-3">Select Winner:</p>
+              
+              <label className="flex items-center gap-3 p-4 border-2 rounded-lg cursor-pointer hover:bg-blue-50 transition"
+                style={{ borderColor: selectedWinner === 'team1' ? '#2563eb' : '#e5e7eb' }}>
+                <input
+                  type="radio"
+                  name="winner"
+                  value="team1"
+                  checked={selectedWinner === 'team1'}
+                  onChange={() => setSelectedWinner('team1')}
+                  className="w-5 h-5 text-blue-600"
+                />
+                <div className="flex-1">
+                  <p className="font-semibold text-gray-800">{currentMatch.team1.name}</p>
+                  <p className="text-sm text-gray-500">{currentMatch.team1.players.map(p => p.name).join(', ')}</p>
+                </div>
+              </label>
+
+              <label className="flex items-center gap-3 p-4 border-2 rounded-lg cursor-pointer hover:bg-green-50 transition"
+                style={{ borderColor: selectedWinner === 'team2' ? '#16a34a' : '#e5e7eb' }}>
+                <input
+                  type="radio"
+                  name="winner"
+                  value="team2"
+                  checked={selectedWinner === 'team2'}
+                  onChange={() => setSelectedWinner('team2')}
+                  className="w-5 h-5 text-green-600"
+                />
+                <div className="flex-1">
+                  <p className="font-semibold text-gray-800">{currentMatch.team2.name}</p>
+                  <p className="text-sm text-gray-500">{currentMatch.team2.players.map(p => p.name).join(', ')}</p>
+                </div>
+              </label>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setShowEndSetModal(false);
+                  setSelectedWinner(null);
+                }}
+                className="flex-1 bg-gray-200 text-gray-700 py-3 rounded-lg hover:bg-gray-300 transition font-semibold"
+                disabled={loading}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmEndSet}
+                disabled={!selectedWinner || loading}
+                className="flex-1 bg-orange-600 text-white py-3 rounded-lg hover:bg-orange-700 transition font-semibold disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {loading && <Loader2 className="w-5 h-5 animate-spin" />}
+                Confirm End Set
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

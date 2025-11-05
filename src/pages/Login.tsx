@@ -1,28 +1,33 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Lock, User, Trophy } from 'lucide-react';
+import { Lock, User, Trophy, Loader2 } from 'lucide-react';
 
 export default function Login() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setLoading(true);
 
-    const validUsername = import.meta.env.VITE_ADMIN_USERNAME;
-    const validPassword = import.meta.env.VITE_ADMIN_PASSWORD;
+    setTimeout(() => {
+      const validUsername = import.meta.env.VITE_ADMIN_USERNAME;
+      const validPassword = import.meta.env.VITE_ADMIN_PASSWORD;
 
-    if (username === validUsername && password === validPassword) {
-      // Store auth token in sessionStorage
-      sessionStorage.setItem('isAuthenticated', 'true');
-      navigate('/dashboard');
-    } else {
-      setError('Invalid username or password');
-      setPassword('');
-    }
+      if (username === validUsername && password === validPassword) {
+        // Store auth token in sessionStorage
+        sessionStorage.setItem('isAuthenticated', 'true');
+        navigate('/dashboard');
+      } else {
+        setError('Invalid username or password');
+        setPassword('');
+        setLoading(false);
+      }
+    }, 500);
   };
 
   return (
@@ -95,9 +100,11 @@ export default function Login() {
           {/* Login Button */}
           <button
             type="submit"
-            className="w-full bg-gradient-to-r from-blue-500 to-purple-600 text-white py-3 rounded-lg font-semibold hover:from-blue-600 hover:to-purple-700 transition-all duration-200 shadow-lg hover:shadow-xl"
+            disabled={loading}
+            className="w-full bg-gradient-to-r from-blue-500 to-purple-600 text-white py-3 rounded-lg font-semibold hover:from-blue-600 hover:to-purple-700 transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
-            Login
+            {loading && <Loader2 className="w-5 h-5 animate-spin" />}
+            {loading ? 'Logging in...' : 'Login'}
           </button>
         </form>
 
