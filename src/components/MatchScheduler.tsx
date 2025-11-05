@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { useTournamentStore } from '../store/tournamentStore';
 import { Match } from '../types';
-import { Calendar, Trophy } from 'lucide-react';
+import { Calendar, Plus, Trash2 } from 'lucide-react';
 
 export const MatchScheduler: React.FC = () => {
-  const { teams, matches, addMatch } = useTournamentStore();
-  const [selectedZone, setSelectedZone] = useState('all');
+  const { teams, matches, addMatch, deleteMatch } = useTournamentStore();
+  const [team1Id, setTeam1Id] = useState('');
+  const [team2Id, setTeam2Id] = useState('');
 
   const zones = [
     { id: 'all', name: 'All Zones' },
@@ -15,38 +16,40 @@ export const MatchScheduler: React.FC = () => {
     { id: 'zone-d', name: 'Zone D' }
   ];
 
-  const generateRoundRobin = (zoneId: string) => {
-    const zoneTeams = zoneId === 'all' 
-      ? teams 
-      : teams.filter(t => t.zone === zoneId);
-
-    if (zoneTeams.length < 2) {
-      alert('Need at least 2 teams to generate matches');
+  const handleManualSchedule = (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!team1Id || !team2Id) {
+      alert('Please select both teams');
       return;
     }
 
-    const newMatches: Match[] = [];
-    
-    for (let i = 0; i < zoneTeams.length; i++) {
-      for (let j = i + 1; j < zoneTeams.length; j++) {
-        const match: Match = {
-          id: `match-${Date.now()}-${i}-${j}`,
-          team1: zoneTeams[i],
-          team2: zoneTeams[j],
-          score: { team1: 0, team2: 0 },
-          status: 'upcoming'
-        };
-        newMatches.push(match);
-      }
+    if (team1Id === team2Id) {
+      alert('Please select different teams');
+      return;
     }
 
-    newMatches.forEach(match => addMatch(match));
-    alert(`Generated ${newMatches.length} matches for ${zoneId === 'all' ? 'all zones' : zones.find(z => z.id === zoneId)?.name}`);
-  };
+    const team1 = teams.find(t => t.id === team1Id);
+    const team2 = teams.find(t => t.id === team2Id);
 
-  const filteredMatches = selectedZone === 'all'
-    ? matches
-    : matches.filter(m => m.team1.zone === selectedZone || m.team2.zone === selectedZone);
+    if (!team1 || !team2) {
+      alert('Invalid team selection');
+      return;
+    }
+
+    const newMatch: Match = {
+      id: `match-${Date.now()}`,
+      team1,
+      team2,
+      score: { team1: 0, team2: 0 },
+      status: 'upcoming'
+    };
+
+    addMatch(newMatch);
+    setTeam1Id('');
+    setTeam2Id('');
+    alert('Match scheduled successfully!');
+  };
 
   const getStatusBadge = (status: string) => {
     const styles = {
@@ -55,6 +58,12 @@ export const MatchScheduler: React.FC = () => {
       completed: 'bg-blue-200 text-blue-800'
     };
     return styles[status as keyof typeof styles] || styles.upcoming;
+  };
+
+  const handleDeleteMatch = (matchId: string, matchInfo: string) => {
+    if (confirm(`Are you sure you want to delete this match?\n${matchInfo}`)) {
+      deleteMatch(matchId);
+    }
   };
 
   return (
@@ -66,43 +75,69 @@ export const MatchScheduler: React.FC = () => {
         </h2>
       </div>
 
-      <div className="mb-6 flex gap-4 items-center flex-wrap">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Select Zone
-          </label>
-          <select
-            value={selectedZone}
-            onChange={(e) => setSelectedZone(e.target.value)}
-            className="px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            {zones.map(zone => (
-              <option key={zone.id} value={zone.id}>{zone.name}</option>
-            ))}
-          </select>
+      {/* Manual Scheduling Form */}
+      <form onSubmit={handleManualSchedule} className="mb-6 p-4 bg-blue-50 rounded-lg border-2 border-blue-200">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-lg font-semibold text-blue-900">Schedule New Match</h3>
+          <Plus className="w-5 h-5 text-blue-700" />
         </div>
-        <div className="mt-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Team 1
+              </label>
+              <select
+                value={team1Id}
+                onChange={(e) => setTeam1Id(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                required
+              >
+                <option value="">Select Team 1</option>
+                {teams.map(team => (
+                  <option key={team.id} value={team.id}>
+                    {team.name} - {zones.find(z => z.id === team.zone)?.name} ({team.players.map(p => p.name).join(' & ')})
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Team 2
+              </label>
+              <select
+                value={team2Id}
+                onChange={(e) => setTeam2Id(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                required
+              >
+                <option value="">Select Team 2</option>
+                {teams.map(team => (
+                  <option key={team.id} value={team.id} disabled={team.id === team1Id}>
+                    {team.name} - {zones.find(z => z.id === team.zone)?.name} ({team.players.map(p => p.name).join(' & ')})
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
           <button
-            onClick={() => generateRoundRobin(selectedZone)}
-            className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition flex items-center gap-2"
+            type="submit"
+            className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 transition font-semibold"
           >
-            <Trophy className="w-5 h-5" />
-            Generate Round Robin
+            Schedule Match
           </button>
-        </div>
-      </div>
+        </form>
 
       <div className="space-y-3">
-        {filteredMatches.length === 0 ? (
+        {matches.length === 0 ? (
           <div className="text-center py-12 text-gray-500">
             <Calendar className="w-16 h-16 mx-auto mb-4 text-gray-300" />
             <p className="text-lg">No matches scheduled</p>
-            <p className="text-sm">Generate matches using the button above</p>
+            <p className="text-sm">Schedule matches using the form above</p>
           </div>
         ) : (
-          filteredMatches.map(match => (
+          matches.map(match => (
             <div key={match.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition">
-              <div className="flex justify-between items-center">
+              <div className="flex justify-between items-start">
                 <div className="flex-1">
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex-1">
@@ -144,6 +179,18 @@ export const MatchScheduler: React.FC = () => {
                     )}
                   </div>
                 </div>
+                {match.status === 'upcoming' && (
+                  <button
+                    onClick={() => handleDeleteMatch(
+                      match.id,
+                      `${match.team1.name} vs ${match.team2.name}`
+                    )}
+                    className="ml-4 text-red-600 hover:text-red-800 hover:bg-red-50 p-2 rounded transition"
+                    title="Delete match"
+                  >
+                    <Trash2 className="w-5 h-5" />
+                  </button>
+                )}
               </div>
             </div>
           ))

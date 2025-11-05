@@ -37,13 +37,17 @@ export const TeamManager: React.FC = () => {
     if (editingTeamId) {
       const team = teams.find(t => t.id === editingTeamId);
       if (team) {
-        updateTeam(editingTeamId, {
-          name: formData.name,
-          zone: formData.zone,
-          players: [player1, player2]
-        });
+        if (window.confirm(`Are you sure you want to update team "${team.name}"?`)) {
+          updateTeam(editingTeamId, {
+            name: formData.name,
+            zone: formData.zone,
+            players: [player1, player2]
+          });
+          setEditingTeamId(null);
+        } else {
+          return;
+        }
       }
-      setEditingTeamId(null);
     } else {
       const newTeam: Team = {
         id: `team-${Date.now()}`,
@@ -192,7 +196,11 @@ export const TeamManager: React.FC = () => {
                   <Edit2 className="w-4 h-4" />
                 </button>
                 <button
-                  onClick={() => deleteTeam(team.id)}
+                  onClick={() => {
+                    if (window.confirm(`Are you sure you want to delete team "${team.name}"?`)) {
+                      deleteTeam(team.id);
+                    }
+                  }}
                   className="text-red-600 hover:text-red-800 transition"
                 >
                   <Trash2 className="w-4 h-4" />

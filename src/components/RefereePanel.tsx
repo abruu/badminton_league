@@ -3,11 +3,14 @@ import { useTournamentStore } from '../store/tournamentStore';
 import { Trophy, Plus, RotateCcw, CheckCircle } from 'lucide-react';
 
 export const RefereePanel: React.FC = () => {
-  const { courts, updateMatchScore, finishMatch, undoLastScore, refreshData } = useTournamentStore();
+  const { courts, updateMatchScore, finishMatch, undoLastScore, refreshData, scoreHistory } = useTournamentStore();
   const [selectedCourtId, setSelectedCourtId] = useState<string>('');
 
   const selectedCourt = courts.find(c => c.id === selectedCourtId);
   const match = selectedCourt?.match;
+
+  // Check if there are any actions to undo for this match
+  const canUndo = match ? scoreHistory.filter(h => h.matchId === match.id).length > 0 : false;
 
   useEffect(() => {
     if (courts.length > 0 && !selectedCourtId) {
@@ -42,9 +45,15 @@ export const RefereePanel: React.FC = () => {
     updateMatchScore(match.id, team, currentScore + 1);
   };
 
-  const handleUndo = () => {
+  const handleUndoScore = () => {
     if (!match) return;
-    undoLastScore(match.id);
+    if (!canUndo) {
+      alert('No actions to undo!');
+      return;
+    }
+    if (window.confirm('Undo the last score update?')) {
+      undoLastScore(match.id);
+    }
   };
 
   const handleFinishMatch = () => {
@@ -144,8 +153,14 @@ export const RefereePanel: React.FC = () => {
             {/* Control Buttons */}
             <div className="grid grid-cols-2 gap-4">
               <button
-                onClick={handleUndo}
-                className="bg-yellow-500 text-white py-3 rounded-lg hover:bg-yellow-600 transition flex items-center justify-center gap-2 text-lg font-semibold"
+                onClick={handleUndoScore}
+                disabled={!canUndo}
+                className={`py-3 rounded-lg transition flex items-center justify-center gap-2 text-lg font-semibold ${
+                  canUndo 
+                    ? 'bg-yellow-500 text-white hover:bg-yellow-600 transform hover:scale-105' 
+                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                }`}
+                title={canUndo ? 'Undo last point' : 'No actions to undo'}
               >
                 <RotateCcw className="w-5 h-5" />
                 Undo Last Point

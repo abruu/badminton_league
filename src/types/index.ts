@@ -1,4 +1,4 @@
-export type MatchStatus = 'upcoming' | 'live' | 'completed';
+export type MatchStatus = 'upcoming' | 'live' | 'completed' | 'pending_approval';
 
 export interface Player {
   id: string;
@@ -28,6 +28,8 @@ export interface Match {
   winner?: Team;
   status: MatchStatus;
   courtId?: string;
+  pendingApproval?: boolean;
+  requestedBy?: string;
 }
 
 export interface Court {
@@ -48,6 +50,8 @@ export interface Referee {
   id: string;
   name: string;
   courtId?: string;
+  username: string;
+  password: string;
 }
 
 export interface TournamentStats {
