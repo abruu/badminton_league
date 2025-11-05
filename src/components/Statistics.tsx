@@ -21,19 +21,19 @@ export const Statistics: React.FC = () => {
   // Calculate zone-based statistics
   const zoneStats = useMemo(() => {
     const stats: { [zoneId: string]: { teams: any[], totalPoints: number, topTeam: any } } = {};
-    
+
     zones.forEach(zone => {
       const zoneTeams = teamsWithStats.filter(t => t.zone === zone.id);
       const totalPoints = zoneTeams.reduce((sum, team) => sum + team.stats.points, 0);
       const topTeam = calculations.getBestTeamByZone(teamsWithStats, zone.id);
-      
+
       stats[zone.id] = {
         teams: zoneTeams,
         totalPoints,
         topTeam
       };
     });
-    
+
     return stats;
   }, [teamsWithStats, zones]);
 
@@ -177,14 +177,14 @@ export const Statistics: React.FC = () => {
           {zones.map(zone => {
             const stats = zoneStats[zone.id];
             if (!stats) return null;
-            
+
             return (
               <div key={zone.id} className="bg-gradient-to-br from-purple-50 to-blue-50 rounded-lg p-4 border-2 border-purple-200">
                 <h4 className="font-bold text-purple-900 mb-3 flex items-center justify-between">
                   <span>{zone.name}</span>
                   <Award className="w-5 h-5 text-yellow-500" />
                 </h4>
-                
+
                 {/* Zone Summary */}
                 <div className="mb-3 p-3 bg-white rounded-lg border border-purple-200">
                   <div className="flex justify-between items-center mb-2">
@@ -202,7 +202,7 @@ export const Statistics: React.FC = () => {
                     </span>
                   </div>
                 </div>
-                
+
                 {/* All Teams in Zone */}
                 <div className="space-y-2">
                   <div className="text-xs font-semibold text-gray-600 mb-2">Team Rankings</div>
@@ -216,9 +216,9 @@ export const Statistics: React.FC = () => {
                         <div className="flex items-center justify-between mb-1">
                           <div className="flex items-center gap-2 flex-1 min-w-0">
                             <span className={`font-bold text-sm flex-shrink-0 ${
-                              index === 0 ? 'text-yellow-600' : 
-                              index === 1 ? 'text-gray-500' : 
-                              index === 2 ? 'text-orange-600' : 
+                              index === 0 ? 'text-yellow-600' :
+                              index === 1 ? 'text-gray-500' :
+                              index === 2 ? 'text-orange-600' :
                               'text-gray-400'
                             }`}>
                               {index === 0 && '🥇'}
@@ -231,7 +231,7 @@ export const Statistics: React.FC = () => {
                           <div className="font-bold text-purple-600 flex-shrink-0 ml-2">{team.stats.points} pts</div>
                         </div>
                         <div className="flex justify-between items-center text-xs text-gray-600 ml-6">
-                          <span>{team.players.map(p => p.name).join(' & ')}</span>
+                          <span>{team.players.map((p: any) => p.name).join(' & ')}</span>
                           <span className="text-xs">
                             <span className="text-green-600 font-semibold">{team.stats.matchesWon}W</span>
                             {' - '}

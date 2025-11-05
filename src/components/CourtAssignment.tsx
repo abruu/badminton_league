@@ -12,10 +12,10 @@ export const CourtAssignment: React.FC = () => {
     if (!matchId) {
       return;
     }
-    
+
     const match = matches.find(m => m.id === matchId);
     const court = courts.find(c => c.id === courtId);
-    
+
     if (match && court) {
       if (window.confirm(`Assign match "${match.team1.name} vs ${match.team2.name}" to ${court.name}?`)) {
         assignMatchToCourt(matchId, courtId);
@@ -27,10 +27,10 @@ export const CourtAssignment: React.FC = () => {
     if (!refereeId) {
       return;
     }
-    
+
     const referee = referees.find(r => r.id === refereeId);
     const court = courts.find(c => c.id === courtId);
-    
+
     if (referee && court) {
       if (window.confirm(`Assign referee "${referee.name}" to ${court.name}?`)) {
         assignRefereeToCourt(refereeId, courtId);
@@ -45,6 +45,9 @@ export const CourtAssignment: React.FC = () => {
   };
 
   const handleReorderMatch = (courtId: string, matchId: string, direction: 'up' | 'down') => {
+    console.log(direction);
+
+
     reorderCourtMatches(courtId, matchId, 'down');
   };
 
@@ -115,8 +118,8 @@ export const CourtAssignment: React.FC = () => {
                   // Check if referee is already assigned to a different court
                   const isAssignedElsewhere = !!(referee.courtId && referee.courtId !== court.id);
                   return (
-                    <option 
-                      key={referee.id} 
+                    <option
+                      key={referee.id}
                       value={referee.id}
                       disabled={isAssignedElsewhere}
                     >
@@ -133,11 +136,11 @@ export const CourtAssignment: React.FC = () => {
               <div className="space-y-2 mb-3">
                 <div className="text-xs font-semibold text-gray-700">Assigned Matches ({court.matches.length})</div>
                 {court.matches.map((match, index) => (
-                  <div 
+                  <div
                     key={match.id}
                     className={`p-2 rounded-lg border text-xs ${
-                      match.status === 'live' 
-                        ? 'bg-green-50 border-green-300' 
+                      match.status === 'live'
+                        ? 'bg-green-50 border-green-300'
                         : 'bg-gray-50 border-gray-300'
                     }`}
                   >
@@ -154,8 +157,8 @@ export const CourtAssignment: React.FC = () => {
                       </div>
                       <div className="flex items-center gap-1">
                         <span className={`text-xs px-2 py-1 rounded ${
-                          match.status === 'live' 
-                            ? 'bg-green-200 text-green-800' 
+                          match.status === 'live'
+                            ? 'bg-green-200 text-green-800'
                             : 'bg-blue-200 text-blue-800'
                         }`}>
                           {match.status === 'live' ? 'LIVE' : 'QUEUED'}
