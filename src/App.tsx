@@ -4,7 +4,7 @@ import { Dashboard } from './pages/Dashboard';
 import { RefereeView } from './pages/RefereeView';
 import { LiveView } from './pages/LiveView';
 import { useTournamentStore } from './store/tournamentStore';
-import { Home, LayoutDashboard, UserCheck, Trophy } from 'lucide-react';
+import { LayoutDashboard, UserCheck, Trophy } from 'lucide-react';
 
 function HomePage() {
   return (
