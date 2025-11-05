@@ -505,6 +505,140 @@ export const RefereePanel: React.FC = () => {
             </div>
           )
         )}
+
+        {/* Completed Matches Section */}
+        {assignedCourt && !currentMatch && (() => {
+          const completedMatches = matches.filter(
+            m => m.courtId === courtId && m.status === 'completed'
+          );
+          
+          if (completedMatches.length === 0) return null;
+
+          return (
+            <div className="bg-white rounded-lg shadow-md p-6 mt-6">
+              <h2 className="text-2xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+                <Trophy className="w-7 h-7 text-green-600" />
+                Completed Matches ({completedMatches.length})
+              </h2>
+              
+              <div className="space-y-4 max-h-[600px] overflow-y-auto">
+                {completedMatches.slice().reverse().map((match) => (
+                  <div key={match.id} className="border-2 border-gray-200 rounded-lg p-6 hover:shadow-lg transition">
+                    {/* Match Header */}
+                    <div className="grid grid-cols-3 gap-4 mb-4">
+                      {/* Team 1 */}
+                      <div className="text-left">
+                        <div className={`font-bold text-lg ${match.winner?.id === match.team1.id ? 'text-green-600' : 'text-gray-700'}`}>
+                          {match.team1.name}
+                          {match.winner?.id === match.team1.id && ' 🏆'}
+                        </div>
+                        <div className="text-sm text-gray-500">
+                          {match.team1.players.map(p => p.name).join(' & ')}
+                        </div>
+                      </div>
+
+                      {/* Score */}
+                      <div className="text-center">
+                        <div className="text-4xl font-bold text-gray-800">
+                          {match.score.team1} - {match.score.team2}
+                        </div>
+                        <div className="text-sm text-gray-500 mt-1">Sets Won</div>
+                      </div>
+
+                      {/* Team 2 */}
+                      <div className="text-right">
+                        <div className={`font-bold text-lg ${match.winner?.id === match.team2.id ? 'text-green-600' : 'text-gray-700'}`}>
+                          {match.team2.name}
+                          {match.winner?.id === match.team2.id && ' 🏆'}
+                        </div>
+                        <div className="text-sm text-gray-500">
+                          {match.team2.players.map(p => p.name).join(' & ')}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Set-by-Set Breakdown */}
+                    <div className="border-t pt-4">
+                      <div className="text-sm font-semibold text-gray-700 mb-3">Set Scores:</div>
+                      <div className="grid grid-cols-3 gap-3">
+                        {match.sets.map((set) => (
+                          <div key={set.setNumber} className="bg-gray-50 rounded-lg p-3 text-center">
+                            <div className="text-xs text-gray-500 font-semibold mb-1">Set {set.setNumber}</div>
+                            <div className="text-2xl font-bold text-gray-800">
+                              <span className={set.score.team1 > set.score.team2 ? 'text-blue-600' : 'text-gray-600'}>
+                                {set.score.team1}
+                              </span>
+                              <span className="text-gray-400 mx-1">-</span>
+                              <span className={set.score.team2 > set.score.team1 ? 'text-green-600' : 'text-gray-600'}>
+                                {set.score.team2}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Team Stats with Points */}
+                    <div className="border-t mt-4 pt-4">
+                      <div className="text-sm font-semibold text-gray-700 mb-3">Points & Statistics:</div>
+                      <div className="grid grid-cols-2 gap-4">
+                        {/* Team 1 Stats */}
+                        <div className="bg-blue-50 rounded-lg p-4">
+                          <div className="font-bold text-blue-900 mb-3 text-center">{match.team1.name}</div>
+                          <div className="space-y-2">
+                            <div className="flex justify-between items-center">
+                              <span className="text-sm text-gray-600">Points Earned:</span>
+                              <span className="font-bold text-lg text-blue-600">
+                                {match.winner?.id === match.team1.id ? '+3' : '+1'}
+                              </span>
+                            </div>
+                            <div className="flex justify-between items-center">
+                              <span className="text-sm text-gray-600">Total Points:</span>
+                              <span className="font-bold text-gray-800">{match.team1.stats.points}</span>
+                            </div>
+                            <div className="flex justify-between items-center">
+                              <span className="text-sm text-gray-600">Matches Won:</span>
+                              <span className="font-bold text-green-600">{match.team1.stats.matchesWon}</span>
+                            </div>
+                            <div className="flex justify-between items-center">
+                              <span className="text-sm text-gray-600">Matches Lost:</span>
+                              <span className="font-bold text-red-600">{match.team1.stats.matchesLost}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Team 2 Stats */}
+                        <div className="bg-green-50 rounded-lg p-4">
+                          <div className="font-bold text-green-900 mb-3 text-center">{match.team2.name}</div>
+                          <div className="space-y-2">
+                            <div className="flex justify-between items-center">
+                              <span className="text-sm text-gray-600">Points Earned:</span>
+                              <span className="font-bold text-lg text-green-600">
+                                {match.winner?.id === match.team2.id ? '+3' : '+1'}
+                              </span>
+                            </div>
+                            <div className="flex justify-between items-center">
+                              <span className="text-sm text-gray-600">Total Points:</span>
+                              <span className="font-bold text-gray-800">{match.team2.stats.points}</span>
+                            </div>
+                            <div className="flex justify-between items-center">
+                              <span className="text-sm text-gray-600">Matches Won:</span>
+                              <span className="font-bold text-green-600">{match.team2.stats.matchesWon}</span>
+                            </div>
+                            <div className="flex justify-between items-center">
+                              <span className="text-sm text-gray-600">Matches Lost:</span>
+                              <span className="font-bold text-red-600">{match.team2.stats.matchesLost}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
       </div>
 
       {/* End Set Modal */}

@@ -117,20 +117,21 @@ export const calculations = {
   },
 
   // Calculate full tournament statistics
+  // NOTE: This now uses database-persisted stats instead of recalculating
   calculateTournamentStats: (teams: Team[], matches: Match[], zones: string[]): TournamentStats => {
-    const updatedTeams = calculations.calculateTeamStats(teams, matches);
+    // Use teams as-is with their database stats (don't recalculate)
     const completedMatches = matches.filter(m => m.status === 'completed').length;
 
     const bestTeamByZone: { [zoneId: string]: Team } = {};
     const bestPlayerByZone: { [zoneId: string]: { player: Player; wins: number } } = {};
 
     zones.forEach(zoneId => {
-      const bestTeam = calculations.getBestTeamByZone(updatedTeams, zoneId);
+      const bestTeam = calculations.getBestTeamByZone(teams, zoneId);
       if (bestTeam) {
         bestTeamByZone[zoneId] = bestTeam;
       }
 
-      const bestPlayer = calculations.getBestPlayerByZone(updatedTeams, matches, zoneId);
+      const bestPlayer = calculations.getBestPlayerByZone(teams, matches, zoneId);
       if (bestPlayer) {
         bestPlayerByZone[zoneId] = bestPlayer;
       }
@@ -141,8 +142,9 @@ export const calculations = {
       completedMatches,
       bestTeamByZone,
       bestPlayerByZone,
-      overallBestTeam: calculations.getOverallBestTeam(updatedTeams),
-      overallBestPlayer: calculations.getBestPlayer(updatedTeams, matches)
+      teams, // Include teams with their database stats
+      overallBestTeam: calculations.getOverallBestTeam(teams),
+      overallBestPlayer: calculations.getBestPlayer(teams, matches)
     };
   },
 

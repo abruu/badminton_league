@@ -5,12 +5,42 @@ import { Team, Match, Court, Referee, Zone, ScoreAction } from '../types';
 export const getTeams = async (): Promise<Team[]> => {
   const { data, error } = await supabase.from('teams').select('*');
   if (error) throw error;
-  return data || [];
+  
+  // Ensure all teams have properly initialized stats
+  const teams = (data || []).map(team => ({
+    ...team,
+    stats: team.stats || { matchesWon: 0, matchesLost: 0, points: 0 }
+  }));
+  
+  console.log('[GET_TEAMS] Teams loaded with stats:', teams.map(t => ({ 
+    id: t.id, 
+    name: t.name, 
+    stats: t.stats 
+  })));
+  
+  return teams;
 };
 
 export const saveTeam = async (team: Team): Promise<void> => {
-  const { error } = await supabase.from('teams').upsert(team);
-  if (error) throw error;
+  console.log('[SAVE_TEAM] Saving team:', { 
+    id: team.id, 
+    name: team.name, 
+    stats: team.stats 
+  });
+  
+  // Ensure stats object exists
+  const teamData = {
+    ...team,
+    stats: team.stats || { matchesWon: 0, matchesLost: 0, points: 0 }
+  };
+  
+  const { error } = await supabase.from('teams').upsert(teamData);
+  if (error) {
+    console.error('[SAVE_TEAM] Error:', error);
+    throw error;
+  }
+  
+  console.log('[SAVE_TEAM] Team saved successfully');
 };
 
 export const deleteTeam = async (id: string): Promise<void> => {

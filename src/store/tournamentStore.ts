@@ -103,6 +103,9 @@ export const useTournamentStore = create<TournamentState>((set, get) => ({
         supabaseStorage.getZones()
       ]);
 
+      console.log('[REFRESH_DATA] Teams loaded from database:', teams);
+      console.log('[REFRESH_DATA] Matches loaded:', matches.map(m => ({ id: m.id, status: m.status, winner: m.winner?.name })));
+
       // Populate courts with their assigned matches
       const courtsWithMatches = courts.map(court => ({
         ...court,
@@ -449,7 +452,8 @@ export const useTournamentStore = create<TournamentState>((set, get) => ({
       const winner = match.score.team1 > match.score.team2 ? match.team1 : match.team2;
       const loser = match.score.team1 > match.score.team2 ? match.team2 : match.team1;
       
-      const updatedMatch = { ...match, status: 'completed' as const, winner, courtId: undefined };
+      // Keep courtId so completed matches can be shown per court
+      const updatedMatch = { ...match, status: 'completed' as const, winner };
       
       // Update match status
       await supabaseStorage.saveMatch(updatedMatch);
@@ -458,29 +462,38 @@ export const useTournamentStore = create<TournamentState>((set, get) => ({
       const winnerTeam = get().teams.find(t => t.id === winner.id);
       const loserTeam = get().teams.find(t => t.id === loser.id);
 
+      console.log('[FINISH_MATCH] Winner team before update:', winnerTeam);
+      console.log('[FINISH_MATCH] Loser team before update:', loserTeam);
+
       if (winnerTeam) {
-        await supabaseStorage.saveTeam({
+        const updatedWinnerTeam = {
           ...winnerTeam,
           stats: {
             matchesWon: winnerTeam.stats.matchesWon + 1,
             matchesLost: winnerTeam.stats.matchesLost,
             points: winnerTeam.stats.points + 3 // 3 points for win
           }
-        });
+        };
+        console.log('[FINISH_MATCH] Saving winner team:', updatedWinnerTeam);
+        await supabaseStorage.saveTeam(updatedWinnerTeam);
       }
 
       if (loserTeam) {
-        await supabaseStorage.saveTeam({
+        const updatedLoserTeam = {
           ...loserTeam,
           stats: {
             matchesWon: loserTeam.stats.matchesWon,
             matchesLost: loserTeam.stats.matchesLost + 1,
             points: loserTeam.stats.points + 1 // 1 point for participation
           }
-        });
+        };
+        console.log('[FINISH_MATCH] Saving loser team:', updatedLoserTeam);
+        await supabaseStorage.saveTeam(updatedLoserTeam);
       }
 
+      console.log('[FINISH_MATCH] Refreshing data...');
       await get().refreshData();
+      console.log('[FINISH_MATCH] Data refreshed, teams:', get().teams);
     } catch (error) {
       console.error('Error finishing match:', error);
     }
@@ -526,26 +539,33 @@ export const useTournamentStore = create<TournamentState>((set, get) => ({
       const winnerTeam = get().teams.find(t => t.id === winner.id);
       const loserTeam = get().teams.find(t => t.id === loser.id);
 
+      console.log('[APPROVE_MATCH] Winner team before update:', winnerTeam);
+      console.log('[APPROVE_MATCH] Loser team before update:', loserTeam);
+
       if (winnerTeam) {
-        await supabaseStorage.saveTeam({
+        const updatedWinnerTeam = {
           ...winnerTeam,
           stats: {
             matchesWon: winnerTeam.stats.matchesWon + 1,
             matchesLost: winnerTeam.stats.matchesLost,
             points: winnerTeam.stats.points + 3 // 3 points for win
           }
-        });
+        };
+        console.log('[APPROVE_MATCH] Saving winner team:', updatedWinnerTeam);
+        await supabaseStorage.saveTeam(updatedWinnerTeam);
       }
 
       if (loserTeam) {
-        await supabaseStorage.saveTeam({
+        const updatedLoserTeam = {
           ...loserTeam,
           stats: {
             matchesWon: loserTeam.stats.matchesWon,
             matchesLost: loserTeam.stats.matchesLost + 1,
             points: loserTeam.stats.points + 1 // 1 point for participation
           }
-        });
+        };
+        console.log('[APPROVE_MATCH] Saving loser team:', updatedLoserTeam);
+        await supabaseStorage.saveTeam(updatedLoserTeam);
       }
 
       // Clear from court
@@ -556,7 +576,9 @@ export const useTournamentStore = create<TournamentState>((set, get) => ({
         }
       }
       
+      console.log('[APPROVE_MATCH] Refreshing data...');
       await get().refreshData();
+      console.log('[APPROVE_MATCH] Data refreshed, teams:', get().teams);
     } catch (error) {
       console.error('Error approving match end:', error);
     }

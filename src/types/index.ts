@@ -85,6 +85,7 @@ export interface TournamentStats {
   completedMatches: number;
   bestPlayerByZone: { [zoneId: string]: { player: Player; wins: number } };
   bestTeamByZone: { [zoneId: string]: Team };
+  teams: Team[]; // Teams with their database-persisted stats
   overallBestTeam?: Team;
   overallBestPlayer?: { player: Player; wins: number };
 }
