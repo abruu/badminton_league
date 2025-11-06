@@ -1,11 +1,12 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useTournamentStore } from '../store/tournamentStore';
 import { calculations } from '../utils/calculations';
-import { TrendingUp, Award, Users, Target, RefreshCw } from 'lucide-react';
+import { TrendingUp, Award, Users, Target, RefreshCw, Calculator, Trophy } from 'lucide-react';
 import { LoadingSpinner } from './LoadingSpinner';
 
 export const Statistics: React.FC = () => {
-  const { teams, matches, zones, courts, refreshData, isLoading, isInitialized } = useTournamentStore();
+  const { teams, matches, zones, courts, refreshData, recalculateAllStatistics, isLoading, isInitialized } = useTournamentStore();
+  const [isRecalculating, setIsRecalculating] = useState(false);
 
   // Real-time subscriptions in useRealtimeSubscriptions hook handle all updates
   // No component-level polling needed - reduces database load significantly
@@ -42,22 +43,75 @@ export const Statistics: React.FC = () => {
     return <LoadingSpinner size="lg" text="Loading Statistics..." />;
   }
 
+  const handleRecalculate = async () => {
+    if (confirm('Recalculate all team statistics from completed matches? This will update all team stats in the database based on actual match results.')) {
+      setIsRecalculating(true);
+      try {
+        await recalculateAllStatistics();
+        alert('Statistics recalculated successfully! All team stats have been updated.');
+      } catch (error) {
+        alert('Error recalculating statistics. Please try again.');
+        console.error(error);
+      } finally {
+        setIsRecalculating(false);
+      }
+    }
+  };
+
   return (
     <div className="bg-white rounded-lg shadow-md p-6">
+      {/* Warning banner if statistics might be stale */}
+      {stats.completedMatches > 0 && teams.some(t => t.stats.points === 0 && t.stats.matchesWon === 0) && (
+        <div className="mb-6 bg-yellow-50 border-2 border-yellow-300 rounded-lg p-4">
+          <div className="flex items-start gap-3">
+            <div className="flex-shrink-0">
+              <Calculator className="w-6 h-6 text-yellow-600" />
+            </div>
+            <div className="flex-1">
+              <h3 className="text-lg font-semibold text-yellow-900 mb-1">
+                Statistics May Need Recalculation
+              </h3>
+              <p className="text-sm text-yellow-800 mb-3">
+                Some teams have zero points despite completed matches. This might happen if:
+              </p>
+              <ul className="text-sm text-yellow-800 list-disc list-inside mb-3 space-y-1">
+                <li>The statistics calculation logic was recently updated</li>
+                <li>Matches were imported or modified directly in the database</li>
+                <li>There was an error during a previous match completion</li>
+              </ul>
+              <p className="text-sm font-semibold text-yellow-900">
+                Click "Recalculate Stats" above to fix this and update all team statistics based on actual match results.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
           <TrendingUp className="w-6 h-6" />
           Tournament Statistics
         </h2>
-        <button
-          onClick={() => refreshData()}
-          disabled={isLoading}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          title="Manually refresh data"
-        >
-          <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
-          Refresh
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={handleRecalculate}
+            disabled={isLoading || isRecalculating}
+            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Recalculate all statistics from matches"
+          >
+            <Calculator className={`w-4 h-4 ${isRecalculating ? 'animate-spin' : ''}`} />
+            {isRecalculating ? 'Recalculating...' : 'Recalculate Stats'}
+          </button>
+          <button
+            onClick={() => refreshData()}
+            disabled={isLoading || isRecalculating}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Manually refresh data"
+          >
+            <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+            Refresh
+          </button>
+        </div>
       </div>
 
       {/* Overall Stats */}
@@ -208,8 +262,12 @@ export const Statistics: React.FC = () => {
                   <div className="text-xs font-semibold text-gray-600 mb-2">Team Rankings</div>
                   {stats.teams
                     .sort((a, b) => {
-                      if (b.stats.points !== a.stats.points) return b.stats.points - a.stats.points;
-                      return b.stats.matchesWon - a.stats.matchesWon;
+                      // Primary: matches won
+                      if (b.stats.matchesWon !== a.stats.matchesWon) {
+                        return b.stats.matchesWon - a.stats.matchesWon;
+                      }
+                      // Secondary: total points scored (tiebreaker)
+                      return b.stats.points - a.stats.points;
                     })
                     .map((team, index) => (
                       <div key={team.id} className="bg-white rounded-lg p-2 border border-gray-200 hover:shadow-md transition">
@@ -265,15 +323,19 @@ export const Statistics: React.FC = () => {
                 <th className="px-4 py-3 text-center text-sm font-semibold text-gray-700">Played</th>
                 <th className="px-4 py-3 text-center text-sm font-semibold text-gray-700">Won</th>
                 <th className="px-4 py-3 text-center text-sm font-semibold text-gray-700">Lost</th>
-                <th className="px-4 py-3 text-center text-sm font-semibold text-gray-700">Points</th>
-                <th className="px-4 py-3 text-center text-sm font-semibold text-gray-700">Avg Score</th>
+                <th className="px-4 py-3 text-center text-sm font-semibold text-gray-700">Total Pts Scored</th>
+                <th className="px-4 py-3 text-center text-sm font-semibold text-gray-700">Avg/Match</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
               {teamsWithStats
                 .sort((a, b) => {
-                  if (b.stats.points !== a.stats.points) return b.stats.points - a.stats.points;
-                  return b.stats.matchesWon - a.stats.matchesWon;
+                  // Primary: matches won
+                  if (b.stats.matchesWon !== a.stats.matchesWon) {
+                    return b.stats.matchesWon - a.stats.matchesWon;
+                  }
+                  // Secondary: total points scored (tiebreaker)
+                  return b.stats.points - a.stats.points;
                 })
                 .map((team, index) => {
                   const avgScore = calculations.calculateAveragePoints(team, matches);
@@ -329,7 +391,97 @@ export const Statistics: React.FC = () => {
 
       {/* Courts with Completed Matches */}
       <div>
-        <h3 className="text-xl font-bold text-gray-800 mb-4">Court Activity & Completed Matches</h3>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-xl font-bold text-gray-800">Court Activity & Completed Matches</h3>
+          <div className="text-sm bg-blue-100 text-blue-800 px-3 py-1 rounded-lg font-semibold">
+            Total Completed: {matches.filter(m => m.status === 'completed').length}
+          </div>
+        </div>
+
+        {/* Show ALL completed matches in a single section */}
+        {(() => {
+          const allCompletedMatches = matches.filter(m => m.status === 'completed');
+          if (allCompletedMatches.length > 0) {
+            return (
+              <div className="mb-6 bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-300 rounded-lg p-6">
+                <h4 className="text-lg font-bold text-blue-900 mb-4 flex items-center gap-2">
+                  <Trophy className="w-6 h-6 text-yellow-500" />
+                  All Completed Matches ({allCompletedMatches.length})
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-[600px] overflow-y-auto">
+                  {[...allCompletedMatches].reverse().map(match => {
+                    const matchCourt = courts.find(c => c.id === match.courtId);
+                    return (
+                      <div key={match.id} className="bg-white rounded-lg p-4 border-2 border-blue-200 shadow-sm hover:shadow-md transition">
+                        {/* Court info */}
+                        {matchCourt && (
+                          <div className="text-xs text-gray-500 mb-2 flex items-center justify-between">
+                            <span>🏟️ {matchCourt.name}</span>
+                            <span className="text-gray-400">Ref: {matchCourt.refereeName}</span>
+                          </div>
+                        )}
+                        {!matchCourt && (
+                          <div className="text-xs text-yellow-600 mb-2">
+                            ⚠️ No court assigned
+                          </div>
+                        )}
+
+                        {/* Match details */}
+                        <div className="mb-3">
+                          <div className="text-sm font-semibold text-gray-800 mb-1">
+                            {match.team1.name}
+                          </div>
+                          <div className="text-xs text-gray-500 mb-2">vs</div>
+                          <div className="text-sm font-semibold text-gray-800">
+                            {match.team2.name}
+                          </div>
+                        </div>
+
+                        {/* Score */}
+                        <div className="bg-blue-50 rounded-lg p-3 mb-2">
+                          <div className="text-center mb-2">
+                            <span className="text-xs text-gray-600">Sets Won</span>
+                            <div className="text-2xl font-bold text-blue-600">
+                              {match.score.team1} - {match.score.team2}
+                            </div>
+                          </div>
+
+                          {/* Set by set scores */}
+                          <div className="border-t border-blue-200 pt-2">
+                            <div className="text-xs text-gray-600 mb-1">Set Scores:</div>
+                            <div className="flex justify-center gap-3">
+                              {match.sets.map((set) => (
+                                <span key={`${match.id}-set-${set.setNumber}`} className="font-mono text-sm font-semibold text-gray-700">
+                                  {set.score.team1}-{set.score.team2}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Winner */}
+                        {match.winner && (
+                          <div className="bg-green-50 rounded-lg p-2 text-center border border-green-200">
+                            <div className="text-xs text-green-700 font-semibold flex items-center justify-center gap-1">
+                              <Trophy className="w-4 h-4 text-yellow-500" />
+                              Winner: {match.winner.name}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          }
+          return (
+            <div className="mb-6 bg-gray-50 rounded-lg p-12 text-center border-2 border-gray-200">
+              <div className="text-gray-400 text-lg">No completed matches yet</div>
+            </div>
+          );
+        })()}
+
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {courts.map(court => {
             const completedMatches = matches.filter(m => m.courtId === court.id && m.status === 'completed');
@@ -356,11 +508,10 @@ export const Statistics: React.FC = () => {
                 {completedMatches.length > 0 ? (
                   <div className="mt-3">
                     <div className="text-xs font-semibold text-blue-700 mb-2">
-                      ✓ Completed Matches ({completedMatches.length})
+                      ✓ All Completed Matches ({completedMatches.length})
                     </div>
-                    <div className="space-y-2 max-h-64 overflow-y-auto">
-                      {completedMatches
-                        .slice(-5)
+                    <div className="space-y-2 max-h-96 overflow-y-auto">
+                      {[...completedMatches]
                         .reverse()
                         .map(match => (
                           <div key={match.id} className="bg-white rounded-lg p-3 border border-blue-200 shadow-sm">
@@ -387,8 +538,8 @@ export const Statistics: React.FC = () => {
                               <div className="flex justify-between text-xs text-gray-500">
                                 <span>Sets:</span>
                                 <div className="flex gap-2">
-                                  {match.sets.map((set, idx) => (
-                                    <span key={idx} className="font-mono">
+                                  {match.sets.map((set) => (
+                                    <span key={`${match.id}-set-${set.setNumber}`} className="font-mono">
                                       {set.score.team1}-{set.score.team2}
                                     </span>
                                   ))}
@@ -397,11 +548,6 @@ export const Statistics: React.FC = () => {
                             </div>
                           </div>
                         ))}
-                      {completedMatches.length > 5 && (
-                        <div className="text-xs text-center text-gray-500 py-1">
-                          +{completedMatches.length - 5} more completed
-                        </div>
-                      )}
                     </div>
                   </div>
                 ) : (

@@ -5,22 +5,27 @@ import { MatchScheduler } from '../components/MatchScheduler';
 import { CourtAssignment } from '../components/CourtAssignment';
 import { RefereeManager } from '../components/RefereeManager';
 import { Statistics } from '../components/Statistics';
-import { LayoutDashboard, Users, Calendar, MapPin, UserCheck, BarChart3, RotateCcw, LogOut, Loader2 } from 'lucide-react';
+import { MatchApprovalPanel } from '../components/MatchApprovalPanel';
+import { LayoutDashboard, Users, Calendar, MapPin, UserCheck, BarChart3, RotateCcw, LogOut, Loader2, CheckSquare } from 'lucide-react';
 import { useTournamentStore } from '../store/tournamentStore';
 
-type Tab = 'teams' | 'matches' | 'courts' | 'referees' | 'stats';
+type Tab = 'teams' | 'matches' | 'courts' | 'referees' | 'stats' | 'approvals';
 
 export const Dashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState<Tab>('teams');
   const [loading, setLoading] = useState(false);
-  const { resetTournament } = useTournamentStore();
+  const { resetTournament, matches } = useTournamentStore();
   const navigate = useNavigate();
+
+  // Count pending approvals
+  const pendingApprovalsCount = matches.filter(m => m.pendingApproval).length;
 
   const tabs = [
     { id: 'teams' as Tab, label: 'Team Management', icon: Users },
     { id: 'matches' as Tab, label: 'Match Scheduler', icon: Calendar },
     { id: 'referees' as Tab, label: 'Referee Management', icon: UserCheck },
     { id: 'courts' as Tab, label: 'Court Assignment', icon: MapPin },
+    { id: 'approvals' as Tab, label: 'Match Approvals', icon: CheckSquare, badge: pendingApprovalsCount },
     { id: 'stats' as Tab, label: 'Statistics', icon: BarChart3 }
   ];
 
@@ -101,7 +106,7 @@ export const Dashboard: React.FC = () => {
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center gap-2 px-6 py-4 font-medium border-b-2 transition whitespace-nowrap ${
+                  className={`flex items-center gap-2 px-6 py-4 font-medium border-b-2 transition whitespace-nowrap relative ${
                     activeTab === tab.id
                       ? 'border-blue-600 text-blue-600 bg-blue-50'
                       : 'border-transparent text-gray-600 hover:text-gray-800 hover:bg-gray-50'
@@ -109,6 +114,11 @@ export const Dashboard: React.FC = () => {
                 >
                   <Icon className="w-5 h-5" />
                   {tab.label}
+                  {tab.badge !== undefined && tab.badge > 0 && (
+                    <span className="absolute -top-1 -right-1 bg-red-600 text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center">
+                      {tab.badge}
+                    </span>
+                  )}
                 </button>
               );
             })}
@@ -122,6 +132,7 @@ export const Dashboard: React.FC = () => {
         {activeTab === 'matches' && <MatchScheduler />}
         {activeTab === 'courts' && <CourtAssignment />}
         {activeTab === 'referees' && <RefereeManager />}
+        {activeTab === 'approvals' && <MatchApprovalPanel />}
         {activeTab === 'stats' && <Statistics />}
       </div>
     </div>

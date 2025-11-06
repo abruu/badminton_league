@@ -367,6 +367,71 @@ export const LiveScoreboard: React.FC = () => {
           </div>
         </div>
 
+        {/* Overall Statistics */}
+        <div className="mt-6 bg-white rounded-xl shadow-lg p-6">
+          <div className="flex items-center gap-2 mb-4">
+            <Award className="w-6 h-6 text-yellow-600" />
+            <h3 className="text-lg font-bold text-gray-800">Tournament Leaders</h3>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Overall Best Team */}
+            <div className="bg-gradient-to-br from-yellow-50 to-orange-50 rounded-lg p-4 border-2 border-yellow-300">
+              <div className="flex items-center gap-2 mb-2">
+                <Trophy className="w-5 h-5 text-yellow-600" />
+                <h4 className="font-bold text-gray-800">Best Team Overall</h4>
+              </div>
+              {calculations.getOverallBestTeam(teamsWithStats) ? (
+                <div>
+                  <div className="text-lg font-bold text-gray-900">
+                    {calculations.getOverallBestTeam(teamsWithStats)!.name}
+                  </div>
+                  <div className="text-sm text-gray-600">
+                    {storeZones.find(z => z.id === calculations.getOverallBestTeam(teamsWithStats)!.zone)?.name}
+                  </div>
+                  <div className="mt-2 flex gap-4 text-xs">
+                    <div>
+                      <div className="font-bold text-yellow-700">{calculations.getOverallBestTeam(teamsWithStats)!.stats.points}</div>
+                      <div className="text-gray-500">Points</div>
+                    </div>
+                    <div>
+                      <div className="font-bold text-green-700">{calculations.getOverallBestTeam(teamsWithStats)!.stats.matchesWon}</div>
+                      <div className="text-gray-500">Wins</div>
+                    </div>
+                    <div>
+                      <div className="font-bold text-red-700">{calculations.getOverallBestTeam(teamsWithStats)!.stats.matchesLost}</div>
+                      <div className="text-gray-500">Losses</div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-gray-400 text-sm">No data yet</div>
+              )}
+            </div>
+
+            {/* Total Tournament Points */}
+            <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-lg p-4 border-2 border-purple-300">
+              <div className="flex items-center gap-2 mb-2">
+                <TrendingUp className="w-5 h-5 text-purple-600" />
+                <h4 className="font-bold text-gray-800">Total Points Distributed</h4>
+              </div>
+              <div>
+                <div className="text-3xl font-bold text-purple-700">
+                  {teamsWithStats.reduce((sum, team) => sum + team.stats.points, 0)}
+                </div>
+                <div className="text-sm text-gray-600 mt-1">
+                  Across {teamsWithStats.length} teams
+                </div>
+                <div className="mt-2 text-xs text-gray-500">
+                  Average: {teamsWithStats.length > 0 
+                    ? (teamsWithStats.reduce((sum, team) => sum + team.stats.points, 0) / teamsWithStats.length).toFixed(1)
+                    : 0} pts/team
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
         {/* Zone-Based Team Points */}
         <div className="mt-6 bg-white rounded-xl shadow-lg p-6">
           <div className="flex items-center gap-2 mb-4">
@@ -433,70 +498,86 @@ export const LiveScoreboard: React.FC = () => {
           </div>
         </div>
 
-        {/* Overall Statistics */}
-        <div className="mt-6 bg-white rounded-xl shadow-lg p-6">
-          <div className="flex items-center gap-2 mb-4">
-            <Award className="w-6 h-6 text-yellow-600" />
-            <h3 className="text-lg font-bold text-gray-800">Tournament Leaders</h3>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Overall Best Team */}
-            <div className="bg-gradient-to-br from-yellow-50 to-orange-50 rounded-lg p-4 border-2 border-yellow-300">
-              <div className="flex items-center gap-2 mb-2">
-                <Trophy className="w-5 h-5 text-yellow-600" />
-                <h4 className="font-bold text-gray-800">Best Team Overall</h4>
-              </div>
-              {calculations.getOverallBestTeam(teamsWithStats) ? (
-                <div>
-                  <div className="text-lg font-bold text-gray-900">
-                    {calculations.getOverallBestTeam(teamsWithStats)!.name}
-                  </div>
-                  <div className="text-sm text-gray-600">
-                    {storeZones.find(z => z.id === calculations.getOverallBestTeam(teamsWithStats)!.zone)?.name}
-                  </div>
-                  <div className="mt-2 flex gap-4 text-xs">
-                    <div>
-                      <div className="font-bold text-yellow-700">{calculations.getOverallBestTeam(teamsWithStats)!.stats.points}</div>
-                      <div className="text-gray-500">Points</div>
-                    </div>
-                    <div>
-                      <div className="font-bold text-green-700">{calculations.getOverallBestTeam(teamsWithStats)!.stats.matchesWon}</div>
-                      <div className="text-gray-500">Wins</div>
-                    </div>
-                    <div>
-                      <div className="font-bold text-red-700">{calculations.getOverallBestTeam(teamsWithStats)!.stats.matchesLost}</div>
-                      <div className="text-gray-500">Losses</div>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div className="text-gray-400 text-sm">No data yet</div>
-              )}
-            </div>
+        {/* All Completed Matches Section */}
+        {(() => {
+          const allCompletedMatches = matches.filter(m => m.status === 'completed');
+          if (allCompletedMatches.length > 0) {
+            return (
+              <div className="mt-6 bg-white rounded-xl shadow-lg p-6">
+                <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+                  <Trophy className="w-6 h-6 text-yellow-500" />
+                  All Completed Matches ({allCompletedMatches.length})
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-[600px] overflow-y-auto">
+                  {[...allCompletedMatches].reverse().map(match => {
+                    const matchCourt = courts.find(c => c.id === match.courtId);
+                    return (
+                      <div key={match.id} className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg p-4 border-2 border-blue-200 shadow-sm hover:shadow-md transition">
+                        {/* Court info */}
+                        {matchCourt && (
+                          <div className="text-xs text-gray-500 mb-2 flex items-center justify-between">
+                            <span>🏟️ {matchCourt.name}</span>
+                            <span className="text-gray-400">Ref: {matchCourt.refereeName}</span>
+                          </div>
+                        )}
+                        {!matchCourt && (
+                          <div className="text-xs text-yellow-600 mb-2">
+                            ⚠️ No court assigned
+                          </div>
+                        )}
+                        
+                        {/* Match details */}
+                        <div className="mb-3">
+                          <div className="text-sm font-semibold text-gray-800 mb-1">
+                            {match.team1.name}
+                          </div>
+                          <div className="text-xs text-gray-500 mb-2">vs</div>
+                          <div className="text-sm font-semibold text-gray-800">
+                            {match.team2.name}
+                          </div>
+                        </div>
 
-            {/* Total Tournament Points */}
-            <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-lg p-4 border-2 border-purple-300">
-              <div className="flex items-center gap-2 mb-2">
-                <TrendingUp className="w-5 h-5 text-purple-600" />
-                <h4 className="font-bold text-gray-800">Total Points Distributed</h4>
+                        {/* Score */}
+                        <div className="bg-white rounded-lg p-3 mb-2 border border-blue-300">
+                          <div className="text-center mb-2">
+                            <span className="text-xs text-gray-600">Sets Won</span>
+                            <div className="text-2xl font-bold text-blue-600">
+                              {match.score.team1} - {match.score.team2}
+                            </div>
+                          </div>
+                          
+                          {/* Set by set scores */}
+                          <div className="border-t border-blue-200 pt-2">
+                            <div className="text-xs text-gray-600 mb-1">Set Scores:</div>
+                            <div className="flex justify-center gap-3">
+                              {match.sets.map((set) => (
+                                <span key={`${match.id}-set-${set.setNumber}`} className="font-mono text-sm font-semibold text-gray-700">
+                                  {set.score.team1}-{set.score.team2}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Winner */}
+                        {match.winner && (
+                          <div className="bg-green-50 rounded-lg p-2 text-center border border-green-200">
+                            <div className="text-xs text-green-700 font-semibold flex items-center justify-center gap-1">
+                              <Trophy className="w-4 h-4 text-yellow-500" />
+                              Winner: {match.winner.name}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
-              <div>
-                <div className="text-3xl font-bold text-purple-700">
-                  {teamsWithStats.reduce((sum, team) => sum + team.stats.points, 0)}
-                </div>
-                <div className="text-sm text-gray-600 mt-1">
-                  Across {teamsWithStats.length} teams
-                </div>
-                <div className="mt-2 text-xs text-gray-500">
-                  Average: {teamsWithStats.length > 0 
-                    ? (teamsWithStats.reduce((sum, team) => sum + team.stats.points, 0) / teamsWithStats.length).toFixed(1)
-                    : 0} pts/team
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+            );
+          }
+          return null;
+        })()}
+        
       </div>
     </div>
   );

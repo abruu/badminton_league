@@ -44,9 +44,9 @@ export const CourtAssignment: React.FC = () => {
     }
   };
 
-  const handleReorderMatch = (courtId: string, matchId: string, direction: 'up' | 'down') => {
-    console.log(direction);
 
+  const handleReorderMatch = (courtId: string, matchId: string, direction: 'up' | 'down') => {
+   console.log('Reordering match:', matchId, 'in direction:', direction);
 
     reorderCourtMatches(courtId, matchId, 'down');
   };

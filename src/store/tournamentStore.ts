@@ -52,6 +52,7 @@ interface TournamentState {
 
   // Utility
   resetTournament: () => Promise<void>;
+  recalculateAllStatistics: () => Promise<void>;
   getTeamStats: () => Team[];
 }
 
@@ -458,12 +459,25 @@ export const useTournamentStore = create<TournamentState>((set, get) => ({
       // Update match status
       await supabaseStorage.saveMatch(updatedMatch);
 
+      // Calculate total badminton points scored by each team from all sets
+      const winnerPointsScored = match.sets.reduce((sum, set) => {
+        const points = winner.id === match.team1.id ? set.score.team1 : set.score.team2;
+        return sum + points;
+      }, 0);
+
+      const loserPointsScored = match.sets.reduce((sum, set) => {
+        const points = loser.id === match.team1.id ? set.score.team1 : set.score.team2;
+        return sum + points;
+      }, 0);
+
       // Update team stats in database
       const winnerTeam = get().teams.find(t => t.id === winner.id);
       const loserTeam = get().teams.find(t => t.id === loser.id);
 
       console.log('[FINISH_MATCH] Winner team before update:', winnerTeam);
       console.log('[FINISH_MATCH] Loser team before update:', loserTeam);
+      console.log('[FINISH_MATCH] Winner points scored:', winnerPointsScored);
+      console.log('[FINISH_MATCH] Loser points scored:', loserPointsScored);
 
       if (winnerTeam) {
         const updatedWinnerTeam = {
@@ -471,7 +485,7 @@ export const useTournamentStore = create<TournamentState>((set, get) => ({
           stats: {
             matchesWon: winnerTeam.stats.matchesWon + 1,
             matchesLost: winnerTeam.stats.matchesLost,
-            points: winnerTeam.stats.points + 3 // 3 points for win
+            points: winnerTeam.stats.points + winnerPointsScored // Add total badminton points scored
           }
         };
         console.log('[FINISH_MATCH] Saving winner team:', updatedWinnerTeam);
@@ -484,7 +498,7 @@ export const useTournamentStore = create<TournamentState>((set, get) => ({
           stats: {
             matchesWon: loserTeam.stats.matchesWon,
             matchesLost: loserTeam.stats.matchesLost + 1,
-            points: loserTeam.stats.points + 1 // 1 point for participation
+            points: loserTeam.stats.points + loserPointsScored // Add total badminton points scored
           }
         };
         console.log('[FINISH_MATCH] Saving loser team:', updatedLoserTeam);
@@ -535,12 +549,25 @@ export const useTournamentStore = create<TournamentState>((set, get) => ({
       
       await supabaseStorage.saveMatch(updatedMatch);
 
+      // Calculate total badminton points scored by each team from all sets
+      const winnerPointsScored = match.sets.reduce((sum, set) => {
+        const points = winner.id === match.team1.id ? set.score.team1 : set.score.team2;
+        return sum + points;
+      }, 0);
+
+      const loserPointsScored = match.sets.reduce((sum, set) => {
+        const points = loser.id === match.team1.id ? set.score.team1 : set.score.team2;
+        return sum + points;
+      }, 0);
+
       // Update team stats in database
       const winnerTeam = get().teams.find(t => t.id === winner.id);
       const loserTeam = get().teams.find(t => t.id === loser.id);
 
       console.log('[APPROVE_MATCH] Winner team before update:', winnerTeam);
       console.log('[APPROVE_MATCH] Loser team before update:', loserTeam);
+      console.log('[APPROVE_MATCH] Winner points scored:', winnerPointsScored);
+      console.log('[APPROVE_MATCH] Loser points scored:', loserPointsScored);
 
       if (winnerTeam) {
         const updatedWinnerTeam = {
@@ -548,7 +575,7 @@ export const useTournamentStore = create<TournamentState>((set, get) => ({
           stats: {
             matchesWon: winnerTeam.stats.matchesWon + 1,
             matchesLost: winnerTeam.stats.matchesLost,
-            points: winnerTeam.stats.points + 3 // 3 points for win
+            points: winnerTeam.stats.points + winnerPointsScored // Add total badminton points scored
           }
         };
         console.log('[APPROVE_MATCH] Saving winner team:', updatedWinnerTeam);
@@ -561,7 +588,7 @@ export const useTournamentStore = create<TournamentState>((set, get) => ({
           stats: {
             matchesWon: loserTeam.stats.matchesWon,
             matchesLost: loserTeam.stats.matchesLost + 1,
-            points: loserTeam.stats.points + 1 // 1 point for participation
+            points: loserTeam.stats.points + loserPointsScored // Add total badminton points scored
           }
         };
         console.log('[APPROVE_MATCH] Saving loser team:', updatedLoserTeam);
@@ -775,6 +802,34 @@ export const useTournamentStore = create<TournamentState>((set, get) => ({
       await get().initializeData();
     } catch (error) {
       console.error('Error resetting tournament:', error);
+    }
+  },
+
+  recalculateAllStatistics: async () => {
+    try {
+      console.log('[RECALCULATE_STATS] Starting recalculation...');
+      const { teams, matches } = get();
+      
+      // Calculate fresh statistics from all completed matches
+      const updatedTeams = calculations.calculateTeamStats(teams, matches);
+      
+      console.log('[RECALCULATE_STATS] Updated teams:', updatedTeams);
+      
+      // Save all updated teams to database
+      for (const team of updatedTeams) {
+        console.log(`[RECALCULATE_STATS] Saving team ${team.name}:`, team.stats);
+        await supabaseStorage.saveTeam(team);
+      }
+      
+      console.log('[RECALCULATE_STATS] All teams saved, refreshing data...');
+      
+      // Refresh data from database
+      await get().refreshData();
+      
+      console.log('[RECALCULATE_STATS] Statistics recalculated successfully!');
+    } catch (error) {
+      console.error('Error recalculating statistics:', error);
+      throw error;
     }
   },
 

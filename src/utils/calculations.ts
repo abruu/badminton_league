@@ -1,32 +1,46 @@
 import { Team, Match, TournamentStats, Player } from '../types';
 
 export const calculations = {
-  // Calculate statistics for all teams
+  /**
+   * Calculate statistics for all teams based on completed matches
+   * Uses existing schema: stats.points stores total badminton points scored
+   */
   calculateTeamStats: (teams: Team[], matches: Match[]): Team[] => {
     const updatedTeams = teams.map(team => ({
       ...team,
       stats: {
         matchesWon: 0,
         matchesLost: 0,
-        points: 0
+        points: 0 // Total badminton points scored across all sets
       }
     }));
 
-    matches.forEach(match => {
-      if (match.status === 'completed' && match.winner) {
-        const winnerTeam = updatedTeams.find(t => t.id === match.winner!.id);
-        const loserTeam = updatedTeams.find(t => 
-          t.id === (match.winner!.id === match.team1.id ? match.team2.id : match.team1.id)
-        );
+    const completedMatches = matches.filter(m => m.status === 'completed');
 
-        if (winnerTeam) {
-          winnerTeam.stats.matchesWon += 1;
-          winnerTeam.stats.points += 3; // 3 points for win
-        }
+    completedMatches.forEach(match => {
+      const { team1, team2, sets, winner } = match;
 
-        if (loserTeam) {
-          loserTeam.stats.matchesLost += 1;
-          loserTeam.stats.points += 1; // 1 point for participation
+      // Calculate total badminton points scored by each team across all sets
+      const team1PointsScored = sets.reduce((sum, set) => sum + set.score.team1, 0);
+      const team2PointsScored = sets.reduce((sum, set) => sum + set.score.team2, 0);
+
+      const team1Ref = updatedTeams.find(t => t.id === team1.id);
+      const team2Ref = updatedTeams.find(t => t.id === team2.id);
+
+      if (!team1Ref || !team2Ref) return;
+
+      // Update total points scored
+      team1Ref.stats.points += team1PointsScored;
+      team2Ref.stats.points += team2PointsScored;
+
+      // Update match wins/losses
+      if (winner) {
+        if (winner.id === team1Ref.id) {
+          team1Ref.stats.matchesWon += 1;
+          team2Ref.stats.matchesLost += 1;
+        } else if (winner.id === team2Ref.id) {
+          team2Ref.stats.matchesWon += 1;
+          team1Ref.stats.matchesLost += 1;
         }
       }
     });
@@ -34,29 +48,43 @@ export const calculations = {
     return updatedTeams;
   },
 
-  // Get best team per zone
+  /**
+   * Get best team per zone
+   * Ranking criteria: 1) Matches won, 2) Total points scored (tiebreaker)
+   */
   getBestTeamByZone: (teams: Team[], zoneId: string): Team | undefined => {
     const zoneTeams = teams.filter(team => team.zone === zoneId);
     if (zoneTeams.length === 0) return undefined;
 
-    return zoneTeams.reduce((best, current) => {
-      if (current.stats.points > best.stats.points) return current;
-      if (current.stats.points === best.stats.points && 
-          current.stats.matchesWon > best.stats.matchesWon) return current;
-      return best;
+    const sorted = [...zoneTeams].sort((a, b) => {
+      // Primary: matches won
+      if (b.stats.matchesWon !== a.stats.matchesWon) {
+        return b.stats.matchesWon - a.stats.matchesWon;
+      }
+      // Secondary: total points scored (tiebreaker)
+      return b.stats.points - a.stats.points;
     });
+
+    return sorted[0];
   },
 
-  // Get overall best team
+  /**
+   * Get overall best team across all zones
+   * Ranking criteria: 1) Matches won, 2) Total points scored (tiebreaker)
+   */
   getOverallBestTeam: (teams: Team[]): Team | undefined => {
     if (teams.length === 0) return undefined;
 
-    return teams.reduce((best, current) => {
-      if (current.stats.points > best.stats.points) return current;
-      if (current.stats.points === best.stats.points && 
-          current.stats.matchesWon > best.stats.matchesWon) return current;
-      return best;
+    const sorted = [...teams].sort((a, b) => {
+      // Primary: matches won
+      if (b.stats.matchesWon !== a.stats.matchesWon) {
+        return b.stats.matchesWon - a.stats.matchesWon;
+      }
+      // Secondary: total points scored (tiebreaker)
+      return b.stats.points - a.stats.points;
     });
+
+    return sorted[0];
   },
 
   // Calculate player wins
@@ -148,7 +176,9 @@ export const calculations = {
     };
   },
 
-  // Calculate average points per match for a team
+  /**
+   * Calculate average badminton points scored per match for a team
+   */
   calculateAveragePoints: (team: Team, matches: Match[]): number => {
     const teamMatches = matches.filter(m => 
       m.status === 'completed' && (m.team1.id === team.id || m.team2.id === team.id)
@@ -157,8 +187,12 @@ export const calculations = {
     if (teamMatches.length === 0) return 0;
 
     const totalPoints = teamMatches.reduce((sum, match) => {
-      const points = match.team1.id === team.id ? match.score.team1 : match.score.team2;
-      return sum + points;
+      // Sum points from all sets for this team
+      const teamPoints = match.sets.reduce((setSum, set) => {
+        const points = match.team1.id === team.id ? set.score.team1 : set.score.team2;
+        return setSum + points;
+      }, 0);
+      return sum + teamPoints;
     }, 0);
 
     return totalPoints / teamMatches.length;
